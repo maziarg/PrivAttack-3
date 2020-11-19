@@ -89,13 +89,15 @@ def save_models(seeds, environment, trajectory_length):
         os.mkdir(path)
 
     for seed in seeds:
-        np.save(path + str(seed) + '_' + str(trajectory_length) + '.npy',
+        np.save(path + str(seed) + str(trajectory_length) + '.npy',
                 format_trajectory(trajectory_length,
-                                  np.load('output/' + environment + '/' + str(seed) + '/trajectories' + extension,
+                                  np.load('output/' + environment + '/seed_' + str(seed) + '/maxEpLen_'
+                                          + str(trajectory_length) + '/trajectories' + extension,
                                           allow_pickle=True)))
 
     for seed in seeds:
-        np.save(path + str(seed) + '_' + str(trajectory_length) + '_test' + '.npy',
+        np.save(path + str(seed) + str(trajectory_length) + '_test' + '.npy',
                 format_trajectory(trajectory_length, np.load(
-                    'output/' + environment + '/' + str(seed) + '/trajectories_test' + extension,
+                    'output/' + environment + '/seed_' + str(seed) + '/maxEpLen_' + str(trajectory_length)
+                    + '/trajectories_test' + extension,
                     allow_pickle=True)))
