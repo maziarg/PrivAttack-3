@@ -205,15 +205,15 @@ def ddpg(trajectory_output_path, env_fn, actor_critic=core.MLPActorCritic, ac_kw
         a += noise_scale * np.random.randn(act_dim)
         return np.clip(a, -act_limit, act_limit)
 
-    def test_agent():
-        for j in range(num_test_episodes):
-            o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
-            while not (d or (ep_len == max_ep_len)):
-                # Take deterministic actions at test time (noise_scale=0)
-                o, r, d, _ = test_env.step(get_action(o, 0))
-                ep_ret += r
-                ep_len += 1
-            logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
+    # def test_agent():
+    #     for j in range(num_test_episodes):
+    #         o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
+    #         while not (d or (ep_len == max_ep_len)):
+    #             # Take deterministic actions at test time (noise_scale=0)
+    #             o, r, d, _ = test_env.step(get_action(o, 0))
+    #             ep_ret += r
+    #             ep_len += 1
+    #         logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
 
     # Prepare for interaction with environment
     total_steps = steps_per_epoch * epochs
@@ -244,7 +244,7 @@ def ddpg(trajectory_output_path, env_fn, actor_critic=core.MLPActorCritic, ac_kw
         # Ignore the "done" signal if it comes from hitting the time
         # horizon (that is, when it's an artificial terminal signal
         # that isn't based on the agent's state)
-        d = False if ep_len == max_ep_len else d
+        d = True if ep_len == max_ep_len else d
 
         # Store experience to replay buffer
         replay_buffer.store(o, a, r, o2, d)
@@ -272,20 +272,20 @@ def ddpg(trajectory_output_path, env_fn, actor_critic=core.MLPActorCritic, ac_kw
             if (epoch % save_freq == 0) or (epoch == epochs):
                 logger.save_state({'env': env}, None)
 
-            # Test the performance of the deterministic version of the agent.
-            test_agent()
-
-            # Log info about epoch
-            logger.log_tabular('Epoch', epoch)
-            logger.log_tabular('EpRet', with_min_and_max=True)
-            logger.log_tabular('TestEpRet', with_min_and_max=True)
-            logger.log_tabular('EpLen', average_only=True)
-            logger.log_tabular('TestEpLen', average_only=True)
-            logger.log_tabular('TotalEnvInteracts', t)
-            logger.log_tabular('QVals', with_min_and_max=True)
-            logger.log_tabular('LossPi', average_only=True)
-            logger.log_tabular('LossQ', average_only=True)
-            logger.log_tabular('Time', time.time() - start_time)
-            logger.dump_tabular()
+            # # Test the performance of the deterministic version of the agent.
+            # test_agent()
+            #
+            # # Log info about epoch
+            # logger.log_tabular('Epoch', epoch)
+            # logger.log_tabular('EpRet', with_min_and_max=True)
+            # logger.log_tabular('TestEpRet', with_min_and_max=True)
+            # logger.log_tabular('EpLen', average_only=True)
+            # logger.log_tabular('TestEpLen', average_only=True)
+            # logger.log_tabular('TotalEnvInteracts', t)
+            # logger.log_tabular('QVals', with_min_and_max=True)
+            # logger.log_tabular('LossPi', average_only=True)
+            # logger.log_tabular('LossQ', average_only=True)
+            # logger.log_tabular('Time', time.time() - start_time)
+            # logger.dump_tabular()
 
     np.save(str(trajectory_output_path) + '.npy', np.asarray(trajectories))
