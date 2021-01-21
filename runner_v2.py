@@ -19,7 +19,7 @@ if __name__ == "__main__":
     parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
     parser.add_argument('--seeds', nargs='*', default='none', type=int)
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
-    parser.add_argument('--trajectory_length' , nargs= '*', type = int) #Must be equal to the max_ep_length in trainer.py
+    parser.add_argument('--trajectory_length' , nargs='*', default= 'none', type = int) #Must be equal to the max_ep_length in trainer.py
 
     args = parser.parse_args()
     timestep_seeds = None
@@ -36,8 +36,10 @@ if __name__ == "__main__":
     if args.fix_num_models != 'no':
         num_models = int(args.fix_num_models)
         print("runnning with a fixed number of models")
-        run_experiments_v2(args.e, args.seeds, args.threshold_arr, args.trajectory_length, attack_model_size, num_predictions=500,
-                           timesteps=args.timesteps, dimension=dimension, number_shadow_models=[num_models])
+        run_experiments_v2(args.e, args.seeds, args.threshold_arr, attack_model_size, num_predictions=50,
+                           dimension=dimension, number_shadow_models=[num_models],
+                           model = args.model, timesteps=args.timesteps, max_ep_length = args.trajectory_length)
     else:
-        run_experiments_v2(args.e, args.seeds, args.threshold_arr, args.trajectory_length, attack_model_size, num_predictions=500,
-                           timesteps=args.timesteps, dimension=dimension, number_shadow_models=num_shadow_models)
+        run_experiments_v2(args.e, args.seeds, args.threshold_arr, attack_model_size, num_predictions=500,
+                           dimension=dimension, number_shadow_models=num_shadow_models,
+                           model = args.model, timesteps=args.timesteps, max_ep_length = args.trajectory_length)

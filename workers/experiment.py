@@ -7,35 +7,31 @@ from itertools import product
 from workers.attack_classifier import train_attack_model_v2
 
 
-def run_experiment_v2(environment, seeds, threshold, trajectory_length, attack_training_size, num_predictions,
-                      timesteps,
-                      dimension, num_models):
+def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_predictions,
+                      dimension, num_models, model, timesteps, max_ep_length):
     seeds = sample(seeds, num_models)
     print("seeds chosen: ", seeds)
 
-    save_models(seeds, environment, trajectory_length)
+    save_models(seeds, environment, model, timesteps, max_ep_length)
     baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives = train_attack_model_v2(
         environment, threshold,
-        trajectory_length, seeds,
+        max_ep_length, seeds,
         attack_training_size,
         num_predictions,
         timesteps, dimension)
     return baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives
 
 
-def run_experiments_v2(env, seeds, thresholds, trajectory_lengths, attack_sizes, num_predictions,
-                       timesteps,
-                       dimension, number_shadow_models):
-    experiment = [trajectory_lengths, attack_sizes, number_shadow_models, thresholds]
+def run_experiments_v2(env, seeds, thresholds, attack_sizes, num_predictions,
+                       dimension, number_shadow_models, model, timesteps, max_ep_length):
+    experiment = [max_ep_length, attack_sizes, number_shadow_models, thresholds]
     product_res = product(*experiment)
     results = []
-    for (trajectory_length, attack_size, num_models, threshold) in product_res:
+    for (max_ep_length, attack_size, num_models, threshold) in product_res:
         baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives = run_experiment_v2(
             env, seeds, threshold,
-            trajectory_length,
-            attack_size, num_predictions,
-            timesteps, dimension,
-            num_models)
+            attack_size, num_predictions, dimension,
+            num_models, model, timesteps, max_ep_length)
 
         results.append(
             [timesteps, env, trajectory_length, attack_size, num_models, threshold, baseline, false_negatives_b1,
@@ -81,7 +77,7 @@ def logger_overwrite(np_results, environment, timesteps):
     return sorted_results
 
 
-def save_models(seeds, environment, trajectory_length):
+def save_models(seeds, environment, model, timesteps, max_ep_length):
     path = 'tmp/'
     extension = '.npy'
 
@@ -89,15 +85,15 @@ def save_models(seeds, environment, trajectory_length):
         os.mkdir(path)
 
     for seed in seeds:
-        np.save(path + str(seed) + str(trajectory_length) + '.npy',
-                format_trajectory(trajectory_length,
-                                  np.load('output/' + environment + '/seed_' + str(seed) + '/maxEpLen_'
-                                          + str(trajectory_length) + '/trajectories' + extension,
+        np.save(path + environment + '_' + model + '_seed' + str(seed) + '_maxEpLen' + str(max_ep_length) + '_timeSteps' + str(timesteps) + '.npy',
+                format_trajectory(max_ep_length,
+                                  np.load('output/' + environment + '/' + model + '/TimeSteps_' + str(timesteps)
+                                          + '/seed_' + str(seed) + '/maxEpLen_' + str(max_ep_length) + '/trajectories' + extension,
                                           allow_pickle=True)))
 
     for seed in seeds:
-        np.save(path + str(seed) + str(trajectory_length) + '_test' + '.npy',
-                format_trajectory(trajectory_length, np.load(
-                    'output/' + environment + '/seed_' + str(seed) + '/maxEpLen_' + str(trajectory_length)
-                    + '/trajectories_test' + extension,
+        np.save(path + environment + '_' + model + '_seed' + str(seed) + '_maxEpLen' + str(max_ep_length) + '_timeSteps' + str(timesteps) + '_test' + '.npy',
+                format_trajectory(max_ep_length, np.load(
+                    'output/' + environment + '/' + model + '/TimeSteps_' + str(timesteps) + '/seed_' + str(seed)
+                    + '/maxEpLen_' + str(max_ep_length) + '/trajectories_test' + extension,
                     allow_pickle=True)))
