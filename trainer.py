@@ -46,6 +46,8 @@ def generate_test_pkl(environment, model, seed, timesteps, max_ep_length):
 
 
 def train_shadow_model(model, environment, seed, timesteps, max_ep_length):
+    #I have to add BCQ here
+    #BCQ reads from the batch folder stored here in buffer folder
     if not os.path.exists('output'):
         os.mkdir('output')
     output_model(model, environment, seed, timesteps, max_ep_length)

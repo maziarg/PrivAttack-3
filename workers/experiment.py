@@ -4,7 +4,7 @@ import pandas as pd
 from random import sample
 from utils.helpers import print_experiment, format_trajectory
 from itertools import product
-from workers.attack_classifier import train_attack_model_v2
+from workers.attack import train_attack_model_v2
 
 
 def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_predictions,

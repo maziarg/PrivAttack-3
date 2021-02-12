@@ -1,6 +1,6 @@
 import unittest
 from trainer import train_shadow_model
-from workers.attack_classifier import train_attack_model_v2
+from workers.attack import train_attack_model_v2
 
 
 class HumanoidTestCase(unittest.TestCase):

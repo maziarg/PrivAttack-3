@@ -3,6 +3,8 @@ import math
 import os
 import uuid
 from random import randint
+import BCQutils
+import BCQ
 
 import numpy as np
 import xgboost as xgb
@@ -25,6 +27,28 @@ def get_trajectory_test(seed, index, trajectory_length):
     return np.load(npy_test, 'r', allow_pickle=True)[index]
 
 
+def create_pairs(state_dim, action_dim, max_action, device, args):
+    #To create trajectory pairs
+    print("creating train-test pairs")
+    # Load buffer
+    setting = f"{args.env}_{args.seed}"
+    buffer_name_train = f"{args.buffer_name}_{setting}"
+    buffer_name_test = f"target_{args.buffer_name}_{setting}"
+
+    print("loading train trajectories")
+    replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer_train.load(f"./buffers/{buffer_name_train}")
+    print("creating index set from not-done array in training set")
+
+    print("loading test trajectories")
+    replay_buffer_test = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer_train.load(f"./buffers/{buffer_name_test}")
+    print("creating index set from not-done array in test set")
+
+    train_size = math.floor(args.attack_training_size / (10 / 8))
+    eval_size = math.floor(args.attack_training_size / (10 / 2))
+    # To continue from here
+
 def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_predictions, dimension):
     path = "tmp_plks/"
     if not os.path.exists(path):
@@ -42,6 +66,7 @@ def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_p
     labels_eval = np.empty(eval_size, dtype=int)
     data_test = np.empty([0, data_length])
     labels_test = []
+    #train and test pair inedcies
     train_pairs, test_pairs = generate_pairs(total_pairs_needed, len(seeds) * num_traj_per_model, num_predictions,
                                              attack_training_size)
 
@@ -254,3 +279,11 @@ def train_attack_model_v2(environment, threshold, trajectory_length, seeds, atta
                      attack_model_size)
 
     return generate_metrics(classifier_predictions, labels_test, threshold, test_size)
+
+
+def train_attack_model_v3(state_dim, action_dim, max_action, device, args):
+
+    attack_train_set = create_pairs(state_dim, action_dim, max_action, device, args)
+
+
+    return None

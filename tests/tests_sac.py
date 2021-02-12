@@ -1,6 +1,6 @@
 import unittest
 from utils.helpers import *
-from workers.attack_classifier import train_attack_model_v2
+from workers.attack import train_attack_model_v2
 from trainer import train_shadow_model
 
 
