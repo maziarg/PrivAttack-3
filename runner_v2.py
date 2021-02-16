@@ -224,10 +224,11 @@ if __name__ == "__main__":
     parser.add_argument("--tau", default=0.005)  # Target network update rate
     parser.add_argument("--lmbda", default=0.75)  # Weighting for clipped double Q-learning in BCQ
     parser.add_argument("--phi", default=0.05)  # Max perturbation hyper-parameter for BCQ
+    parser.add_argument("--generate_negative_buffer", default=1)  # If 1, generate positive_pair buffer
     parser.add_argument("--train_behavioral", action="store_true")  # If true, train behavioral (DDPG)
     parser.add_argument("--train_policy", action="store_true")  # If true, train policy (BCQ)
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
-    parser.add_argument("--generate_correlated_buffer", action="store_true")  # If true, generate trajectory-based buffer
+
     parser.add_argument("--generate_targeted_buffer", action="store_true")  # If true, generate buffer using a given set of start states
 
     parser.add_argument("--attack_threshold", default=0.75)  # Threshold for attack training
@@ -275,6 +276,9 @@ if __name__ == "__main__":
 
     if not os.path.exists("./buffers"):
         os.makedirs("./buffers")
+
+    if not os.path.exists("./attack_outputs"):
+        os.makedirs("./attack_outputs")
 
     env = gym.make(args.env)
 

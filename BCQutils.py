@@ -56,7 +56,6 @@ class ReplayBuffer(object):
     def load(self, save_folder, size=-1):
         reward_buffer = np.load(f"{save_folder}_reward.npy")
 
-
         # Adjust crt_size if we're using a custom size
         size = min(int(size), self.max_size) if size > 0 else self.max_size
         self.size = min(reward_buffer.shape[0], size)
@@ -69,3 +68,5 @@ class ReplayBuffer(object):
         self.num_trajectories = int(np.load(f"{save_folder}_number_of_trajectories.npy"))
         self.trajectory_end_index[:self.num_trajectories] = np.load(f"{save_folder}_trajectory_end_index.npy")
         self.initial_state[:self.num_trajectories] = np.load(f"{save_folder}_initial_state.npy")
+
+
