@@ -4,7 +4,7 @@ import pandas as pd
 from random import sample
 from utils.helpers import print_experiment, format_trajectory
 from itertools import product
-from workers.attack import train_attack_model_v2
+from workers.attack import train_attack_model_v3
 
 
 def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_predictions,
@@ -22,30 +22,27 @@ def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_p
     return baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives
 
 
-def run_experiments_v2(env, seeds, thresholds, attack_sizes, num_predictions,
-                       dimension, number_shadow_models, model, timesteps, max_ep_length):
-    experiment = [max_ep_length, attack_sizes, number_shadow_models, thresholds]
+def run_experiments_v2(attack_path, state_dim, action_dim, max_action, device, args):
+    experiment = [args.attack_sizes, args.attack_thresholds]
     product_res = product(*experiment)
     results = []
-    for (max_ep_length, attack_size, num_models, threshold) in product_res:
-        baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives = run_experiment_v2(
-            env, seeds, threshold,
-            attack_size, num_predictions, dimension,
-            num_models, model, timesteps, max_ep_length)
+    for (attack_size, attack_threshold) in product_res:
+        baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives = \
+            train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device, args)
 
         results.append(
-            [timesteps, env, trajectory_length, attack_size, num_models, threshold, baseline, false_negatives_b1,
+            [args.env, attack_size, attack_threshold, baseline, false_negatives_b1,
              false_positives_bl, rmse, accuracy,
              false_negatives, false_positives])
 
-        logger_inplace(timesteps, env, trajectory_length, attack_size, num_models, threshold, baseline,
-                       false_negatives_b1, false_positives_bl, rmse, accuracy,
-                       false_negatives, false_positives)
+        logger_inplace(args.max_timesteps, args.env, attack_size, attack_threshold, baseline, false_negatives_b1,
+             false_positives_bl, rmse, accuracy,
+             false_negatives, false_positives)
 
-    logger_overwrite(np.asarray(results), env, timesteps)
+    logger_overwrite(np.asarray(results), args.env, args.max_timesteps)
 
 
-def logger_inplace(timesteps, env, trajectory_length, attack_size, num_models, threshold, baseline, false_negatives_b1,
+def logger_inplace(timesteps, env, attack_size, threshold, baseline, false_negatives_b1,
                    false_positives_bl, rmse, accuracy,
                    false_negatives, false_positives):
     # log to file just in-case
@@ -53,7 +50,7 @@ def logger_inplace(timesteps, env, trajectory_length, attack_size, num_models, t
         os.mkdir('output/results')
 
     with open('./output/results/' + env + '_' + str(timesteps), "a") as results:
-        print((timesteps, env, trajectory_length, attack_size, num_models, threshold, baseline, false_negatives_b1,
+        print((timesteps, env, attack_size, threshold, baseline, false_negatives_b1,
                false_positives_bl, rmse, accuracy,
                false_negatives, false_positives),
               file=results)
@@ -64,12 +61,12 @@ def logger_overwrite(np_results, environment, timesteps):
     sorted_results = np_results[np_results[:, 8].argsort()[::-1]]
     with open('./output/results/' + environment + '_' + str(timesteps), "w") as results:
         print(
-            "trajectory_length, env, attack_mdl_size, number_of_models, threshold, baseline_accuracy, baseline precision, baseline recall, rmse, attack_accuracy, attack precision, attack recall",
+            "timesteps, env, attack_threshold, baseline_accuracy, baseline precision, baseline recall, rmse, attack_accuracy, attack precision, attack recall",
             file=results)
-        for (timesteps, env, trajectory_length, attack_size, num_models, threshold, baseline, false_negatives_b1,
+        for (timesteps, env, attack_size, threshold, baseline, false_negatives_b1,
              false_positives_bl, rmse,
              accuracy, false_negatives, false_positives) in sorted_results:
-            print((timesteps, env, trajectory_length, attack_size, num_models, threshold, baseline, false_negatives_b1,
+            print((timesteps, env, attack_size, threshold, baseline, false_negatives_b1,
                    false_positives_bl, rmse, accuracy,
                    false_negatives, false_positives),
                   file=results)
