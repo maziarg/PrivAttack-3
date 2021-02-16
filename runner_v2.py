@@ -14,8 +14,6 @@ import BCQutils
 from workers import attack, experiment
 
 
-
-
 # Handles interactions with the environment, i.e. train behavioral or generate buffer
 def interact_with_environment(env, state_dim, action_dim, max_action, device, args):
     # For saving files
@@ -307,7 +305,7 @@ if __name__ == "__main__":
 
 
 
-    training_iters = 0
+    #training_iters = 0
 
     # timestep_seeds = None
     # dimension = 0

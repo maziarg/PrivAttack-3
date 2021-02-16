@@ -125,94 +125,54 @@ def create_test_pairs(state_dim, action_dim, max_action, device, args):
     #To create trajectory pairs
     print("creating input-output pairs...")
     # Load buffer
-    if args.generate_negative_buffer:
-        setting = f"{args.env}_{args.seed}"
-    else:
-        setting = f"{args.env}_{args.seed}_{args.generate_negative_buffer}"
-    buffer_name_train = f"{args.buffer_name}_{setting}"
-    buffer_name_test = f"target_{args.buffer_name}_{setting}"
-    buffer_name_attack_train_pairs = f"attack_train_{args.buffer_name}_{setting}"
+    setting = f"{args.env}_{args.seed}"
+    buffer_name_input = f"private_input_{args.buffer_name}_{setting}"
+    buffer_name_output = f"private_output_{args.buffer_name}_{setting}"
 
-    final_train_dataset = []
+    final_prediction_test_dataset = []
 
-    final_eval_dataset = []
-
-    print("loading train trajectories...")
-    replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"./buffers/{buffer_name_train}")
+    print("loading input trajectories...")
+    replay_buffer_input = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer_input.load(f"./buffers/{buffer_name_input}")
     print("creating index set from not-done array in training set")
 
-    print("loading test trajectories...")
-    replay_buffer_test = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_test.load(f"./buffers/{buffer_name_test}")
+    print("loading output trajectories...")
+    replay_buffer_output = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer_output.load(f"./buffers/{buffer_name_output}")
     print("creating index set from not-done array in test set")
 
-    train_num_trajectories = replay_buffer_train.num_trajectories
-    train_start_states = replay_buffer_train.initial_state
-    train_trajectories_end_index = replay_buffer_train.trajectory_end_index
+    input_num_trajectories = replay_buffer_input.num_trajectories
+    input_start_states = replay_buffer_input.initial_state
+    input_trajectories_end_index = replay_buffer_input.trajectory_end_index
 
-    test_num_trajectories = replay_buffer_test.num_trajectories
-    test_start_states = replay_buffer_test.initial_state
-    test_trajectories_end_index = replay_buffer_test.trajectory_end_index
+    output_num_trajectories = replay_buffer_output.num_trajectories
+    output_start_states = replay_buffer_output.initial_state
+    output_trajectories_end_index = replay_buffer_output.trajectory_end_index
 
-    #Choosing 80% of input trajectories for training and the rest of evaluation
-    train_size = math.floor(train_num_trajectories / (10 / 8))
-    eval_train_size = train_num_trajectories - train_size
-
-    # Choosing 80% of output trajectories for training and the rest of evaluation
-    test_size = math.floor(test_num_trajectories / (10 / 8))
-    eval_test_size = test_num_trajectories - test_size
 
     print(f"creating_{args.generate_negative_buffer}_training_pairs...")
     # Pairing the entire training with test in the broadcast fashion
-    for j in range(test_size):
+    for j in range(output_num_trajectories):
         #Pairing the entire train set with the j-th test trajectory
         temp_sequence = []
-        for i in range(train_size):
-            temp_sequence = [[train_start_states[i], test_start_states[j]]]
+        for i in range(input_num_trajectories):
+            temp_sequence = [[input_start_states[i], output_start_states[j]]]
             if i == 0:
-                temp_sequence.append(np.load(f"./buffers/{buffer_name_train}_action.npy")[0:train_trajectories_end_index[i]:1])
+                temp_sequence.append(np.load(f"./buffers/{buffer_name_input}_action.npy")[0:input_trajectories_end_index[i]:1])
             else:
-                temp_sequence.append(np.load(f"./buffers/{buffer_name_train}_action.npy")[train_trajectories_end_index[i-1]:train_trajectories_end_index
+                temp_sequence.append(np.load(f"./buffers/{buffer_name_input}_action.npy")[input_trajectories_end_index[i-1]:input_trajectories_end_index
                                                                                           [i]:1])
             if j == 0:
-                temp_sequence.append(np.load(f"./buffers/{buffer_name_test}_action.npy")[0:test_trajectories_end_index[j]:1])
+                temp_sequence.append(np.load(f"./buffers/{buffer_name_output}_action.npy")[0:output_trajectories_end_index[j]:1])
             else:
-                temp_sequence.append(np.load(f"./buffers/{buffer_name_test}_action.npy")[test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1])
+                temp_sequence.append(np.load(f"./buffers/{buffer_name_output}_action.npy")[output_trajectories_end_index[j-1]:output_trajectories_end_index[j]:1])
 
             temp_sequence.append(args.generate_negative_buffer)
-            final_train_dataset.append(temp_sequence)
+            final_prediction_test_dataset.append(temp_sequence)
             temp_sequence = []
     print(f"Done creating_{args.generate_negative_buffer}_training_pairs!")
 
-    # Pairing the eval training with test in the broadcast fashion
-    print(f"creating_{args.generate_negative_buffer}_eval_pairs...")
-    # Pairing the entire training with test in the broadcast fashion
-    for j in range(eval_test_size):
-        # Pairing the entire train set with the j-th test trajectory
-        temp_sequence = []
-        for i in range(eval_train_size):
-            temp_sequence = [[train_start_states[i+train_size-1], test_start_states[j+test_size-1]]]
-            if i == 0:
-                temp_sequence.append(
-                    np.load(f"./buffers/{buffer_name_train}_action.npy")[0:train_trajectories_end_index[i]:1])
-            else:
-                temp_sequence.append(np.load(f"./buffers/{buffer_name_train}_action.npy")[
-                                     train_trajectories_end_index[i+train_size - 1]:train_trajectories_end_index
-                                     [i+train_size]:1])
-            if j == 0:
-                temp_sequence.append(
-                    np.load(f"./buffers/{buffer_name_test}_action.npy")[0:test_trajectories_end_index[j]:1])
-            else:
-                temp_sequence.append(np.load(f"./buffers/{buffer_name_test}_action.npy")[
-                                     test_trajectories_end_index[j+test_size - 1]:test_trajectories_end_index[j+ test_size]:1])
-
-            temp_sequence.append(args.generate_negative_buffer)
-            final_eval_dataset.append(temp_sequence)
-            temp_sequence = []
-    print(f"Done creating_{args.generate_negative_buffer}_eval_pairs!")
-
-    return final_train_dataset, final_eval_dataset
+    return final_prediction_test_dataset
 
 
 def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_predictions, dimension):
@@ -454,5 +414,11 @@ def train_attack_model_v3(state_dim, action_dim, max_action, device, args):
     attack_classifier = train_classifier(xgb.DMatrix([item[:2] for item in attack_train_data], [item[-1] for item in attack_train_data]),
                                          xgb.DMatrix([item[:2] for item in attack_eval_data], [item[-1] for item in attack_eval_data]))
     print("training finished --> generating predictions")
+    attack_test_pairs = np.load(create_test_pairs(state_dim, action_dim, max_action, device, args))
+    xgb_testing = xgb.DMatrix(attack_test_pairs)
+    classifier_predictions = attack_classifier.predict(xgb_testing)
 
-    return None
+    print_experiment(args.env, args.seed, args.attack_threshold, None,
+                     args.attack_training_size)
+    #At the moment we only test the classifier against positive pairs
+    return generate_metrics(classifier_predictions, [item[-1] for item in attack_test_pairs], args.attack_threshold, args.attack_training_size)
