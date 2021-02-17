@@ -84,3 +84,26 @@ if __name__ == "__main__":
 
 
 
+    #training_iters = 0
+
+    # timestep_seeds = None
+    # dimension = 0
+    # print(args)
+    #
+    # if args.env == "HalfCheetah-v2":
+    #     dimension = 24
+    # if args.env == "Humanoid-v2":
+    #     dimension = 394
+    # if args.env == "Hopper-v2":
+    #     dimension = 15
+    #
+    # if args.fix_num_models != 'no':
+    #     num_models = int(args.fix_num_models)
+    #     print("runnning with a fixed number of models")
+    #     run_experiments_v2(args.e, args.seed, args.threshold_arr, attack_model_size, num_predictions=50,
+    #                        dimension=dimension, number_shadow_models=[num_models],
+    #                        model = args.model, timesteps=args.timesteps, max_ep_length = args.trajectory_length)
+    # else:
+    #     run_experiments_v2(args.e, args.seed, args.threshold_arr, attack_model_size, num_predictions=500,
+    #                        dimension=dimension, number_shadow_models=num_shadow_models,
+    #                        model = args.model, timesteps=args.timesteps, max_ep_length = args.trajectory_length)
