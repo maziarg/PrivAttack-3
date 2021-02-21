@@ -5,10 +5,14 @@ import uuid
 from random import randint
 import BCQutils
 import BCQ
+import pathlib
 
 import numpy as np
 import xgboost as xgb
 from scipy.stats.mstats import gmean
+
+from pandas import DataFrame
+
 
 from utils.helpers import cleanup, print_experiment, generate_pairs, get_models
 
@@ -34,6 +38,9 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     else:
         seed = int(args.seed[1])
 
+    if not os.path.exists(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/"):
+        os.makedirs(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/")
+
     print("creating input-output pairs...")
     # Load buffer
     setting = f"{args.env}_{seed}"
@@ -47,13 +54,13 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
 
     print("loading train trajectories...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"./{attack_path}/buffers/{buffer_name_train}")
-    print("creating index set from not-done array in training set")
+    replay_buffer_train.load(f"./{attack_path}/{seed}/buffers/{buffer_name_train}")
+    print("creating index set from not-done array in training set...")
 
     print("loading test trajectories...")
     replay_buffer_test = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_test.load(f"./{attack_path}/buffers/{buffer_name_evidence}")
-    print("creating index set from not-done array in test set")
+    replay_buffer_test.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}")
+    print("creating index set from not-done array in test set...")
 
     train_num_trajectories = replay_buffer_train.num_trajectories
     train_start_states = replay_buffer_train.initial_state
@@ -63,6 +70,9 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     test_start_states = replay_buffer_test.initial_state
     test_trajectories_end_index = replay_buffer_test.trajectory_end_index
 
+    if args.out_traj_size < test_num_trajectories:
+        test_num_trajectories = args.out_traj_size
+
     #Choosing 80% of input trajectories for training and the rest of evaluation
     train_size = math.floor(train_num_trajectories / (10 / 8))
     eval_train_size = train_num_trajectories - train_size
@@ -71,24 +81,41 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     test_size = math.floor(test_num_trajectories / (10 / 8))
     eval_test_size = test_num_trajectories - test_size
 
-    print(f"creating_{args.generate_negative_buffer}_training_pairs...")
+    print(f"creating training_pairs...")
     # Pairing the entire training with test in the broadcast fashion
     for j in range(test_size):
         #Pairing the entire train set with the j-th test trajectory
         temp_sequence = []
         for i in range(train_size):
-            temp_sequence = [[train_start_states[i], test_start_states[j]]]
+            temp_sequence.extend([train_start_states[i]])
+            temp_sequence.extend([test_start_states[j]])
+            m = 2*len(temp_sequence[0])
+            temp_sequence = np.concatenate(temp_sequence, axis=0).reshape(m, 1)
             if i == 0:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_train}_action.npy")[0:train_trajectories_end_index[i]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_train}_action.npy")[
+                                                                        0:train_trajectories_end_index[i]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
             else:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_train}_action.npy")[train_trajectories_end_index[i-1]:train_trajectories_end_index
-                                                                                          [i]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_train}_action.npy")
+                                    [train_trajectories_end_index[i-1]:train_trajectories_end_index[i]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
             if j == 0:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_evidence}_action.npy")[0:test_trajectories_end_index[j]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}_action.npy")[0:
+                                                                                test_trajectories_end_index[j]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
             else:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_evidence}_action.npy")[test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}_action.npy")
+                                    [test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
 
-            temp_sequence.append(label)
+            temp_sequence = np.concatenate((temp_sequence, np.reshape(label, (1, 1))), axis=0)
+            with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/train_{args.out_traj_size}.npy", 'ab')\
+                    as f:
+                np.save(f, temp_sequence)
             final_train_dataset.append(temp_sequence)
             temp_sequence = []
     print(f"Done creating training_pairs!")
@@ -100,22 +127,36 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
         # Pairing the entire train set with the j-th test trajectory
         temp_sequence = []
         for i in range(eval_train_size):
-            temp_sequence = [[train_start_states[i+train_size-1], test_start_states[j+test_size-1]]]
+            temp_sequence.extend([train_start_states[i+train_size-1]])
+            temp_sequence.extend([test_start_states[j+test_size-1]])
+            m = 2 * len(temp_sequence[0])
+            temp_sequence = np.concatenate(temp_sequence, axis=0).reshape(m, 1)
             if i == 0:
-                temp_sequence.append(
-                    np.load(f"./{attack_path}/buffers/{buffer_name_train}_action.npy")[0:train_trajectories_end_index[i]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_train}_action.npy")[0:
+                                                                             train_trajectories_end_index[i]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
             else:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_train}_action.npy")[
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_train}_action.npy")[
                                      train_trajectories_end_index[i+train_size - 1]:train_trajectories_end_index
                                      [i+train_size]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
             if j == 0:
-                temp_sequence.append(
-                    np.load(f"./{attack_path}/buffers/{buffer_name_evidence}_action.npy")[0:test_trajectories_end_index[j]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}_action.npy")[0:
+                                                                                 test_trajectories_end_index[j]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
             else:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_evidence}_action.npy")[
-                                     test_trajectories_end_index[j+test_size - 1]:test_trajectories_end_index[j+ test_size]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}_action.npy")[
+                                     test_trajectories_end_index[j+test_size - 1]:test_trajectories_end_index[j+
+                                                                                                    test_size]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
 
-            temp_sequence.append(label)
+            temp_sequence = np.concatenate((temp_sequence, np.reshape(label, (1, 1))), axis=0)
+            with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/eval_{args.out_traj_size}.npy", 'ab') as f:
+                np.save(f, temp_sequence)
             final_eval_dataset.append(temp_sequence)
             temp_sequence = []
     print(f"Done creating eval_pairs!")
@@ -133,6 +174,9 @@ def create_test_pairs(attack_path, state_dim, action_dim, max_action, device, ar
     else:
         seed = int(args.seed[1])
 
+    if not os.path.exists(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/"):
+        os.makedirs(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/")
+
     #To create trajectory pairs
     print("creating input-output pairs...")
     # Load buffer
@@ -144,12 +188,12 @@ def create_test_pairs(attack_path, state_dim, action_dim, max_action, device, ar
 
     print("loading input trajectories...")
     replay_buffer_input = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_input.load(f"./{attack_path}/buffers/{buffer_name_input}")
+    replay_buffer_input.load(f"./{attack_path}/{args.seed}/buffers/{buffer_name_input}")
     print("creating index set from not-done array in training set")
 
     print("loading output trajectories...")
     replay_buffer_output = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_output.load(f"./{attack_path}/buffers/{buffer_name_output}")
+    replay_buffer_output.load(f"./{attack_path}/{args.seed}/buffers/{buffer_name_output}")
     print("creating index set from not-done array in test set")
 
     input_num_trajectories = replay_buffer_input.num_trajectories
@@ -160,27 +204,45 @@ def create_test_pairs(attack_path, state_dim, action_dim, max_action, device, ar
     output_start_states = replay_buffer_output.initial_state
     output_trajectories_end_index = replay_buffer_output.trajectory_end_index
 
-    print(f"creating training_pairs...")
+    print(f"creating test pairs...")
     # Pairing the entire training with test in the broadcast fashion
     for j in range(output_num_trajectories):
         #Pairing the entire train set with the j-th test trajectory
         temp_sequence = []
         for i in range(input_num_trajectories):
-            temp_sequence = [[input_start_states[i], output_start_states[j]]]
+            temp_sequence.extend([input_start_states[i]])
+            temp_sequence.extend([output_start_states[j]])
+            m = 2 * len(temp_sequence[0])
+            temp_sequence = np.concatenate(temp_sequence, axis=0).reshape(m, 1)
             if i == 0:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_input}_action.npy")[0:input_trajectories_end_index[i]:1])
-            else:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_input}_action.npy")[input_trajectories_end_index[i-1]:input_trajectories_end_index
-                                                                                          [i]:1])
-            if j == 0:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_output}_action.npy")[0:output_trajectories_end_index[j]:1])
-            else:
-                temp_sequence.append(np.load(f"./{attack_path}/buffers/{buffer_name_output}_action.npy")[output_trajectories_end_index[j-1]:output_trajectories_end_index[j]:1])
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_input}_action.npy")
+                                    [0:input_trajectories_end_index[i]:1])
 
-            temp_sequence.append(label)
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
+            else:
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_input}_action.npy")
+                                    [input_trajectories_end_index[i-1]:input_trajectories_end_index[i]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
+            if j == 0:
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_output}_action.npy")
+                                    [0:output_trajectories_end_index[j]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
+            else:
+                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_output}_action.npy")
+                                    [output_trajectories_end_index[j-1]:output_trajectories_end_index[j]:1])
+                temp_arr = temp_arr.reshape(len(temp_arr), 1)
+                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
+
+            temp_sequence = np.concatenate((temp_sequence, np.reshape(label, (1, 1))), axis=0)
+            with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/test_{args.out_traj_size}.npy", 'ab') \
+                    as f:
+                np.save(f, temp_sequence)
             final_prediction_test_dataset.append(temp_sequence)
             temp_sequence = []
-    print(f"Done creating_{args.generate_negative_buffer}_training_pairs!")
+    print(f"Done creating test pairs!")
 
     return final_prediction_test_dataset
 
@@ -423,14 +485,27 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
                                                                                max_action, device, args, 1)
     attack_train_negative_data, attack_eval_negative_data = create_train_pairs(attack_path, state_dim, action_dim,
                                                                                max_action, device, args, 0)
-    attack_train_data = attack_train_positive_data + attack_train_negative_data
-    attack_eval_data = attack_eval_positive_data + attack_eval_negative_data
 
-    print("training classifier")
-    attack_classifier = train_classifier(xgb.DMatrix([item[:2] for item in attack_train_data], [item[-1] for item in
-                                                                                                attack_train_data]),
-                                         xgb.DMatrix([item[:2] for item in attack_eval_data], [item[-1] for item in
-                                                                                               attack_eval_data]))
+    attack_train_data = np.concatenate([attack_train_positive_data, attack_train_negative_data])
+    attack_eval_data = np.concatenate([attack_eval_positive_data, attack_eval_negative_data])
+
+    print("preparing data for classifier training ...")
+
+    classifier_train_data_x, classifier_train_data_y = [item[:-1] for item in attack_train_data], \
+                                                       [np.asarray(item[-1]) for item in attack_train_data]
+    classifier_eval_data_x, classifier_eval_data_y = [item[:-1] for item in attack_eval_data], \
+                                                     [np.asarray(item[-1]) for item in attack_eval_data]
+    #train_x = np.load(f"./{attack_path}/{0}/attack_outputs/traj_based_buffers/train_{args.out_traj_size}.npy")[1]
+    train_y = DataFrame(classifier_train_data_y, columns=['trajectory_label'])
+
+    #eval_x = np.load(f"./{attack_path}/{0}/attack_outputs/traj_based_buffers/eval_{args.out_traj_size}.npy")[1]
+    eval_y = DataFrame(classifier_eval_data_y, columns=['trajectory_label'])
+
+    classifier_train_data = xgb.DMatrix(pathlib.PurePath(f"./{attack_path}/{0}/attack_outputs/traj_based_buffers/eval_{args.out_traj_size}.npy"), train_y)
+    classifier_eval_data = xgb.DMatrix(classifier_eval_data_x, eval_y)
+
+    print("classifier training ...")
+    attack_classifier = train_classifier(classifier_train_data, classifier_eval_data)
     print("training finished --> generating predictions")
 
     attack_test_positive_pairs = np.load(
@@ -438,7 +513,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     attack_test_negative_pairs = np.load(
         create_test_pairs(attack_path, state_dim, action_dim, max_action, device, args, 0))
 
-    attack_test_pairs = attack_test_positive_pairs + attack_test_negative_pairs
+    attack_test_pairs = np.concatenate([attack_test_positive_pairs, attack_test_negative_pairs])
     xgb_testing = xgb.DMatrix(attack_test_pairs)
     classifier_predictions = attack_classifier.predict(xgb_testing)
 

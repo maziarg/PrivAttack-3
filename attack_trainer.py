@@ -16,13 +16,13 @@ from workers import attack, experiment
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env" , help="the environment you are in", default="Hopper-v3")           # OpenAI gym environment name
-    parser.add_argument("--seed", nargs=4)                                              # Sets Gym, PyTorch and Numpy seeds
-    parser.add_argument("--buffer_name", default="Robust")                                          # Prepends name to filename
+    parser.add_argument("--env" , help="the environment you are in", default="Hopper-v3")  # OpenAI gym environment name
+    parser.add_argument("--seed", nargs=4, type=int)                          # Sets Gym, PyTorch and Numpy seeds
+    parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
 
-    parser.add_argument("--eval_freq", default=5e3, type=float)                                     # How often (time steps) we evaluate
+    parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=1e6,
-                        type=int)                           # Max time steps to run environment or train for (this defines buffer size)
+                        type=int)   # Max time steps to run environment or train for (this defines buffer size)
     parser.add_argument("--start_timesteps", default=25e3,
                         type=int) # Time steps initial random policy is used before training behavioral
     parser.add_argument("--rand_action_p", default=0.3,
@@ -38,7 +38,9 @@ if __name__ == "__main__":
     parser.add_argument("--train_policy", action="store_true")  # If true, train policy (BCQ)
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
     parser.add_argument("--attack_thresholds", nargs='*', type=float)  # Threshold for attack training
-    parser.add_argument("--attack_sizes", nargs='*', type=float)  # Attack training size
+    parser.add_argument("--attack_sizes", nargs='*', type=int)  # Attack training size
+    parser.add_argument('--out_traj_size', default=10, type=int)
+
 
     parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str)
     parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests")
@@ -48,31 +50,21 @@ if __name__ == "__main__":
                         help="size of the training set for the attack model")
     parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
-    parser.add_argument('--trajectory_length' , nargs='*', default= 1000, type = int) #Must be equal to the max_
+    parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  #Must be equal to the max_
     # ep_length in trainer.py
 
     args = parser.parse_args()
 
     print("---------------------------------------")
-    if args.train_behavioral:
-        print(f"Setting: Training behavioral, Env: {args.env}, Seed: {args.seed}")
-    elif args.generate_buffer:
-        print(f"Setting: Generating buffer, Env: {args.env}, Seed: {args.seed}")
-    else:
-        print(f"Setting: Training BCQ, Env: {args.env}, Seed: {args.seed}")
-    print("---------------------------------------")
+    print(f"Setting: Training Attack, Env: {args.env}, Seed: {args.seed}")
 
-    if args.train_behavioral and args.generate_buffer:
-        print("Train_behavioral and generate_buffer cannot both be true.")
-        exit()
-
-    attack_path = f"{args.env}/{args.max_timesteps}/{args.seed}"
+    attack_path = f"{args.env}/{args.max_timesteps}"
 
     env = gym.make(args.env)
 
-    env.seed(args.seed)
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    env.seed(args.seed[0])
+    torch.manual_seed(args.seed[0])
+    np.random.seed(args.seed[0])
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
@@ -81,7 +73,6 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     experiment.run_experiments_v2(attack_path, state_dim, action_dim, max_action, device, args)
-
 
 
     #training_iters = 0
