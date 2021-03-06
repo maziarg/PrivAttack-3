@@ -51,29 +51,32 @@ def pad_traj(traj, padd_len):
 
 def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, args, label, max_traj_len=False, train_padding_len=0, test_padding_len=0):
     #To create trajectory pairs
+    # For label 1, I need to pair train and test from seed 0 
+    # For label 0, I need to pair test from seed 0 and train from seed 1
+    # evidence == test == seed 0 
     if label:
-        seed = int(args.seed[0])
+        train_seed = int(args.seed[0])
+        test_seed = int(args.seed[0])
     else:
-        seed = int(args.seed[1])
+        train_seed = int(args.seed[1])
+        test_seed = int(args.seed[0])
 
-    if not os.path.exists(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/"):
-        os.makedirs(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/")
+    # if not os.path.exists(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/"):
+    #     os.makedirs(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/")
 
     print("creating input-output pairs...")
     # Load buffer
-    setting = f"{args.env}_{seed}"
-    buffer_name_train = f"{args.buffer_name}_{setting}"
-    buffer_name_evidence = f"target_{args.buffer_name}_{setting}"
-    buffer_name_attack_train_pairs = f"attack_train_{args.buffer_name}_{setting}"
+    buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
+    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}" # BCQ output
 
     print("loading train trajectories...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"./{attack_path}/{seed}/buffers/{buffer_name_train}")
+    replay_buffer_train.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}")
     print("creating index set from not-done array in training set...")
 
     print("loading test trajectories...")
     replay_buffer_test = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_test.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}")
+    replay_buffer_test.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}")
     print("creating index set from not-done array in test set...")
 
     train_num_trajectories = replay_buffer_train.num_trajectories
@@ -92,6 +95,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     if max_traj_len:
         return train_max_traj_len, test_max_traj_len
 
+    # TODO: what is this ? How does it affect the system
     if args.out_traj_size < test_num_trajectories:
         test_num_trajectories = args.out_traj_size
 
@@ -105,17 +109,18 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
 
     final_train_dataset = None
     final_train_dataset_label = None
+    # Loading test/train buffers
+    test_seq_buffer = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))
+    train_seq_buffer = np.ravel(np.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))
     print(f"creating training_pairs...")
     # TODO: a refactoring is needed here, as there are lot of duplication in the process!
     # Pairing the entire training with test in the broadcast fashion
     for j in range(test_size):
         #Pairing the entire train set with the j-th test trajectory
         if j == 0:
-            test_seq = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}_action.npy"))[
-                0:test_trajectories_end_index[j]:1]
+            test_seq = test_seq_buffer[0:test_trajectories_end_index[j]:1]
         else:
-            test_seq = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}_action.npy"))[
-                test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1]
+            test_seq = test_seq_buffer[test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1]
         # Padding test trajectories till the maximum length trajectory achieves
         # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
         # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
@@ -125,13 +130,9 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
             start_seq = np.concatenate((np.asarray(train_start_states[i]), np.asarray(test_start_states[j])))
             if i == 0:
                 # TODO: Does it make sense to load this file every time? What is the impact on memory/performance here?
-                train_seq = np.ravel(np.load(
-                    f"./{attack_path}/{seed}/buffers/{buffer_name_train}_action.npy"))[
-                        0:train_trajectories_end_index[i]:1]
+                train_seq = train_seq_buffer[0:train_trajectories_end_index[i]:1]
             else:
-                train_seq = np.ravel(np.load(
-                    f"./{attack_path}/{seed}/buffers/{buffer_name_train}_action.npy"))[
-                        train_trajectories_end_index[i-1]:train_trajectories_end_index[i]:1]
+                train_seq = train_seq_buffer[train_trajectories_end_index[i-1]:train_trajectories_end_index[i]:1]
             # Padding train trajectories
             train_seq = pad_traj(train_seq, train_padding_len)
             # Putting start seq, train and test trajectories together
@@ -142,11 +143,11 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
 
             # TODO: for now, we are both saving the arrays in a file on disk. This is in parallel with returning the result
             # TODO: After measuring the performance, just use one of the methods!
-            with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/train_{args.out_traj_size}.npy", 'ab')\
-                    as f:
-                # Concatenating the label to the trajectories here since this is a parallel transfer of data,
-                # then save the file
-                np.save(f, np.concatenate((complete_traj_seq, np.array([label]))))
+            # with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/train_{args.out_traj_size}.npy", 'ab')\
+            #         as f:
+            #     # Concatenating the label to the trajectories here since this is a parallel transfer of data,
+            #     # then save the file
+            #     np.save(f, np.concatenate((complete_traj_seq, np.array([label]))))
 
             # vertically stack the trajectories to be fed into xgboost or anothe classifier
             final_train_dataset = complete_traj_seq if not isinstance(
@@ -164,7 +165,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     for j in eval_test_size:
         # First index is a corner case that only happens if the entire length of a trajectory is 1
         first_index = test_trajectories_end_index[j-1] if j > 0 else 0
-        test_seq = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_evidence}_action.npy"))[
+        test_seq = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))[
             first_index:test_trajectories_end_index[j]:1]
         # Padding test trajectories till the maximum length trajectory achieves
         # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
@@ -180,7 +181,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
             # First index is a corner case that only happens if the entire length of a trajectory is 1
             first_index = train_trajectories_end_index[i-1] if i > 0 else 0
             train_seq = np.ravel(np.load(
-                f"./{attack_path}/{seed}/buffers/{buffer_name_train}_action.npy"))[
+                f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))[
                     first_index:train_trajectories_end_index[i]:1]
             # Padding train trajectories
             train_seq = pad_traj(train_seq, train_padding_len)
@@ -192,10 +193,10 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
 
             # TODO: for now, we are both saving the arrays in a file on disk. This is in parallel with returning the result
             # TODO: After measuring the performance, just use one of the methods!
-            with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/eval_{args.out_traj_size}.npy", 'ab') as f:
-                # Concatenating the label to the trajectories here since this is a parallel transfer of data,
-                # then save the file
-                np.save(f, np.concatenate((complete_traj_seq, np.array([label]))))
+            # with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/eval_{args.out_traj_size}.npy", 'ab') as f:
+            #     # Concatenating the label to the trajectories here since this is a parallel transfer of data,
+            #     # then save the file
+            #     np.save(f, np.concatenate((complete_traj_seq, np.array([label]))))
 
             # vertically stack the trajectories to be fed into xgboost or anothe classifier
             final_eval_dataset = complete_traj_seq if not isinstance(
@@ -208,89 +209,111 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     return final_train_dataset, final_eval_dataset
 
 #starting the attack test sequence genration
-def create_test_pairs(attack_path, state_dim, action_dim, max_action, device, args, label):
-
-    target_positive_seed = int(args.seed[2])
-    target_negative_seed = int(args.seed[3])
+def create_test_pairs(
+    attack_path, state_dim, action_dim, max_action, device, args, label, 
+    max_traj_len=False, train_padding_len=0, test_padding_len=0):
 
     if label:
-        seed = int(args.seed[0])
+        train_seed = int(args.seed[2])
+        test_seed = int(args.seed[2])
     else:
-        seed = int(args.seed[1])
+        train_seed = int(args.seed[3])
+        test_seed = int(args.seed[2])
 
-    if not os.path.exists(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/"):
-        os.makedirs(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/")
+    # if not os.path.exists(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/"):
+    #     os.makedirs(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/")
 
     #To create trajectory pairs
     print("creating input-output pairs...")
     # Load buffer
-    setting = f"{args.env}_{seed}"
+    buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
+    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}"  # BCQ output
     
-    # TODO: What are these private_input/output? there is no reference anywhere to these!?
-    buffer_name_input = f"private_input_{args.buffer_name}_{setting}"
-    buffer_name_output = f"private_output_{args.buffer_name}_{setting}"
-
-    final_prediction_test_dataset = []
-
     print("loading input trajectories...")
-    replay_buffer_input = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_input.load(f"./{attack_path}/{seed}/buffers/{buffer_name_input}")
+    replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer_train.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}")
     print("creating index set from not-done array in training set")
 
     print("loading output trajectories...")
-    replay_buffer_output = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_output.load(f"./{attack_path}/{seed}/buffers/{buffer_name_output}")
+    replay_buffer_test = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer_test.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}")
     print("creating index set from not-done array in test set")
 
-    input_num_trajectories = replay_buffer_input.num_trajectories
-    input_start_states = replay_buffer_input.initial_state
-    input_trajectories_end_index = replay_buffer_input.trajectory_end_index
+    train_num_trajectories = replay_buffer_train.num_trajectories
+    train_start_states = replay_buffer_train.initial_state
+    train_trajectories_end_index = replay_buffer_train.trajectory_end_index
+    # Maximum trajectory length is calculated for padding purposes
+    train_max_traj_len = get_max_trajectory_length(train_trajectories_end_index)
 
-    output_num_trajectories = replay_buffer_output.num_trajectories
-    output_start_states = replay_buffer_output.initial_state
-    output_trajectories_end_index = replay_buffer_output.trajectory_end_index
+    test_num_trajectories = replay_buffer_test.num_trajectories
+    test_start_states = replay_buffer_test.initial_state
+    test_trajectories_end_index = replay_buffer_test.trajectory_end_index
+    # Maximum trajectory length is calculated for padding purposes
+    test_max_traj_len = get_max_trajectory_length(test_trajectories_end_index)
 
+    # TODO: This huge hack should be removed after refactoring this part of the code!!!
+    if max_traj_len:
+        return train_max_traj_len, test_max_traj_len
+
+    final_train_dataset = None
+    final_train_dataset_label = None
+
+    test_seq_buffer = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))
+    train_seq_buffer = np.ravel(np.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))
     print(f"creating test pairs...")
     # Pairing the entire training with test in the broadcast fashion
-    for j in range(output_num_trajectories):
+    for j in range(test_num_trajectories):
         #Pairing the entire train set with the j-th test trajectory
-        temp_sequence = []
-        for i in range(input_num_trajectories):
-            temp_sequence.extend([input_start_states[i]])
-            temp_sequence.extend([output_start_states[j]])
-            m = 2 * len(temp_sequence[0])
-            temp_sequence = np.concatenate(temp_sequence, axis=0).reshape(m, 1)
+        if j == 0:
+            test_seq = test_seq_buffer[0:test_trajectories_end_index[j]:1]
+        else:
+            test_seq = test_seq_buffer[test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1]
+        # Padding test trajectories till the maximum length trajectory achieves
+        # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
+        # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
+        test_seq = pad_traj(test_seq, test_padding_len)
+
+        for i in range(train_num_trajectories):
+            # TODO seems like start states are of type ndarray, add checks if it was not the case later on.
+            start_seq = np.concatenate((np.asarray(train_start_states[i]), np.asarray(test_start_states[j])))
             if i == 0:
-                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_input}_action.npy")
-                                    [0:input_trajectories_end_index[i]:1])
-
-                temp_arr = temp_arr.reshape(len(temp_arr), 1)
-                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
+                # TODO: Does it make sense to load this file every time? What is the impact on memory/performance here?
+                train_seq = train_seq_buffer[0:train_trajectories_end_index[i]:1]
             else:
-                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_input}_action.npy")
-                                    [input_trajectories_end_index[i-1]:input_trajectories_end_index[i]:1])
-                temp_arr = temp_arr.reshape(len(temp_arr), 1)
-                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
-            if j == 0:
-                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_output}_action.npy")
-                                    [0:output_trajectories_end_index[j]:1])
-                temp_arr = temp_arr.reshape(len(temp_arr), 1)
-                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
-            else:
-                temp_arr = np.ravel(np.load(f"./{attack_path}/{seed}/buffers/{buffer_name_output}_action.npy")
-                                    [output_trajectories_end_index[j-1]:output_trajectories_end_index[j]:1])
-                temp_arr = temp_arr.reshape(len(temp_arr), 1)
-                temp_sequence = np.concatenate((temp_arr, temp_sequence), axis=0)
+                train_seq = train_seq_buffer[train_trajectories_end_index[i-1]:train_trajectories_end_index[i]:1]
 
-            temp_sequence = np.concatenate((temp_sequence, np.reshape(label, (1, 1))), axis=0)
-            with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/test_{args.out_traj_size}.npy", 'ab') \
-                    as f:
-                np.save(f, temp_sequence)
-            final_prediction_test_dataset.append(temp_sequence)
-            temp_sequence = []
+            # Padding train trajectories
+            train_seq = pad_traj(train_seq, train_padding_len)
+            # Putting start seq, train and test trajectories together
+            complete_traj_seq = np.concatenate((start_seq, train_seq, test_seq))
+            # saving labels as a separate ndarray
+            final_train_dataset_label = np.array([label]) if not isinstance(
+                final_train_dataset_label, np.ndarray) else np.vstack((final_train_dataset_label, np.array([label])))
+
+            # TODO: for now, we are both saving the arrays in a file on disk. This is in parallel with returning the result
+            # TODO: After measuring the performance, just use one of the methods!
+            # with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/train_{args.out_traj_size}.npy", 'ab')\
+            #         as f:
+            #     # Concatenating the label to the trajectories here since this is a parallel transfer of data,
+            #     # then save the file
+            #     np.save(f, np.concatenate((complete_traj_seq, np.array([label]))))
+
+            # vertically stack the trajectories to be fed into xgboost or anothe classifier
+            final_train_dataset = complete_traj_seq if not isinstance(
+                final_train_dataset, np.ndarray) else np.vstack((final_train_dataset, complete_traj_seq))
+
+    # we save a tuple of trajectories and lables. XGBoost needs a matrix of data and label
+    final_train_dataset = (final_train_dataset, final_train_dataset_label)
+
+            # temp_sequence = np.concatenate((temp_sequence, np.reshape(label, (1, 1))), axis=0)
+            # with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/test_{args.out_traj_size}.npy", 'ab') \
+            #         as f:
+            #     np.save(f, temp_sequence)
+            # final_prediction_test_dataset.append(temp_sequence)
+            # temp_sequence = []
     print(f"Done creating test pairs!")
 
-    return final_prediction_test_dataset
+    return final_train_dataset
 
 
 def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_predictions, dimension):
@@ -589,14 +612,30 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     attack_classifier = train_classifier(classifier_train_data, classifier_eval_data)
     print("training finished --> generating predictions")
 
-    attack_test_positive_pairs = np.load(
-        create_test_pairs(attack_path, state_dim, action_dim, max_action, device, args, 1))
-    attack_test_negative_pairs = np.load(
-        create_test_pairs(attack_path, state_dim, action_dim, max_action, device, args, 0))
+    # This hack should be removed after refactoring. We need to create several helper functions 
+    # that performs a subset of create_train_pairs
+    # Here we get the maximum length for both positive/negative test/train trajectories
+    max_train_pos_len, max_test_pos_len = create_test_pairs(
+        attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
+    max_train_neg_len, max_test_neg_len = create_test_pairs(
+        attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
 
-    attack_test_pairs = np.concatenate([attack_test_positive_pairs, attack_test_negative_pairs])
-    xgb_testing = xgb.DMatrix(attack_test_pairs)
-    classifier_predictions = attack_classifier.predict(xgb_testing)
+    final_train_dataset_pos, final_train_dataset_pos_label = create_test_pairs(
+        attack_path, state_dim, action_dim, max_action, device, args, 1,
+        test_padding_len=max(max_test_neg_len, max_test_pos_len),
+        train_padding_len=max(max_train_pos_len, max_train_neg_len)
+    )
+
+    final_train_dataset_neg, final_train_dataset_neg_label = create_test_pairs(
+        attack_path, state_dim, action_dim, max_action, device, args, 0,
+        test_padding_len=max(max_test_neg_len, max_test_pos_len),
+        train_padding_len=max(max_train_pos_len, max_train_neg_len)
+    )
+
+    attack_test_data_x = np.vstack((final_train_dataset_pos, final_train_dataset_neg))
+    attack_test_data_y = np.vstack((final_train_dataset_pos_label, final_train_dataset_neg_label))
+    classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
+    classifier_predictions = attack_classifier.predict(classifier_test_data)
 
     print_experiment(args.env, args.seed, args.attack_threshold, None,
                      args.attack_training_size)
