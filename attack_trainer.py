@@ -6,6 +6,7 @@ import gym
 import numpy as np
 import os
 import torch
+# import yaml
 
 import BCQ
 import DDPG
@@ -55,6 +56,18 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # reading the parameter from a yaml file instead of the command line arguments!
+    # This is to automate the entire process!
+    # run_conf = None
+    # if not os.path.exists("config.yaml"):
+    #     raise FileNotFoundError("Config Yaml file not found!")
+    # with open("config.yaml", 'r') as yaml_f:
+    #     try:
+    #         run_conf = yaml.safe_load(yaml_f)
+    #     except yaml.YAMLError as exc:
+    #         print(exc)
+    #         raise
+
     print("---------------------------------------")
     print(f"Setting: Training Attack, Env: {args.env}, Seed: {args.seed}")
 
@@ -62,6 +75,9 @@ if __name__ == "__main__":
 
     env = gym.make(args.env)
 
+    # Note the used of single seed here.
+    # Though the usage of a single seed does not affect state_dim, action_dim, max_action.
+    # TODO: would this usage model affect other parts of the code?
     env.seed(args.seed[0])
     torch.manual_seed(args.seed[0])
     np.random.seed(args.seed[0])

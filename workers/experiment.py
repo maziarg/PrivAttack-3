@@ -31,7 +31,7 @@ def run_experiments_v2(attack_path, state_dim, action_dim, max_action, device, a
             train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device, args)
 
         results.append(
-            [args.env, attack_size, attack_threshold, baseline, false_negatives_b1,
+            [args.max_timesteps, args.env, attack_size, attack_threshold, baseline, false_negatives_b1,
              false_positives_bl, rmse, accuracy,
              false_negatives, false_positives])
 
@@ -47,7 +47,7 @@ def logger_inplace(timesteps, env, attack_size, threshold, baseline, false_negat
                    false_negatives, false_positives):
     # log to file just in-case
     if not os.path.exists('output/results'):
-        os.mkdir('output/results')
+        os.makedirs('output/results')
 
     with open('./output/results/' + env + '_' + str(timesteps), "a") as results:
         print((timesteps, env, attack_size, threshold, baseline, false_negatives_b1,

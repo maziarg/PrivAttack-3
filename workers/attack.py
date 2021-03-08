@@ -2,7 +2,7 @@ import gc
 import math
 import os
 import uuid
-from random import randint
+from random import randint, SystemRandom
 import BCQutils
 import BCQ
 import pathlib
@@ -255,6 +255,11 @@ def create_test_pairs(
     if max_traj_len:
         return train_max_traj_len, test_max_traj_len
 
+    # TODO: This should not be here at all for create test pairs. However, this will bound the system
+    print(f"number of test trajectories is {test_num_trajectories}")
+    if 10 < test_num_trajectories:
+        test_num_trajectories = 10
+
     final_train_dataset = None
     final_train_dataset_label = None
 
@@ -474,19 +479,19 @@ def accuracy_report(classifier_predictions, labels_test, threshold, num_predicti
     false_positives = 0
     false_negatives = 0
     for i in range(num_predictions):
-        if classifier_predictions[i] >= threshold and labels_test[i] is 1:
+        if classifier_predictions[i] >= threshold and labels_test[i] == 1:
             num_correct += 1
-        elif classifier_predictions[i] < threshold and labels_test[i] is 0:
+        elif classifier_predictions[i] < threshold and labels_test[i] == 0:
             num_correct += 1
 
         # false negative (classifier is saying out but labels say in)
-        elif classifier_predictions[i] < threshold and labels_test[i] is 1:
+        elif classifier_predictions[i] < threshold and labels_test[i] == 1:
             false_negatives += 1
 
         # false positive (classifier is saying in but labels say out)
-        elif classifier_predictions[i] >= threshold and labels_test[i] is 0:
+        elif classifier_predictions[i] >= threshold and labels_test[i] == 0:
             false_positives += 1
-
+    print(f"num_correct={num_correct}, false_positive={false_positives}, false_negative={false_negatives}")
     return output_prec_recall((num_correct / num_predictions), (false_negatives / num_predictions),
                               (false_positives / num_predictions))
 
@@ -553,23 +558,31 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     # This hack should be removed after refactoring. We need to create several helper functions 
     # that performs a subset of create_train_pairs
     # Here we get the maximum length for both positive/negative test/train trajectories
-    max_train_pos_len, max_test_pos_len = create_train_pairs(
+    tp_max_train_pos_len, tp_max_test_pos_len = create_train_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
-    max_train_neg_len, max_test_neg_len = create_train_pairs(
+    tp_max_train_neg_len, tp_max_test_neg_len = create_train_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
+    
+    te_max_train_pos_len, te_max_test_pos_len = create_test_pairs(
+        attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
+    te_max_train_neg_len, te_max_test_neg_len = create_test_pairs(
+        attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
+
+    test_padding_len=max(tp_max_test_neg_len, tp_max_test_pos_len, te_max_test_pos_len, te_max_test_neg_len)
+    train_padding_len=max(tp_max_train_pos_len, tp_max_train_neg_len, te_max_train_pos_len, te_max_train_neg_len)
 
     # Pairing train and test trajectories
     # Feeding max length trajectory to be uesd for padding purposes
     attack_train_positive_data, attack_eval_positive_data = create_train_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 1,
-        test_padding_len=max(max_test_neg_len, max_test_pos_len),
-        train_padding_len=max(max_train_pos_len, max_train_neg_len)
+        test_padding_len=test_padding_len,
+        train_padding_len=train_padding_len
     )
     
     attack_train_negative_data, attack_eval_negative_data = create_train_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 0,
-        test_padding_len=max(max_test_neg_len, max_test_pos_len),
-        train_padding_len=max(max_train_pos_len, max_train_neg_len)
+        test_padding_len=test_padding_len,
+        train_padding_len=train_padding_len
     )
     
     print("preparing train data for classifier training ...")
@@ -615,21 +628,16 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     # This hack should be removed after refactoring. We need to create several helper functions 
     # that performs a subset of create_train_pairs
     # Here we get the maximum length for both positive/negative test/train trajectories
-    max_train_pos_len, max_test_pos_len = create_test_pairs(
-        attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
-    max_train_neg_len, max_test_neg_len = create_test_pairs(
-        attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
-
     final_train_dataset_pos, final_train_dataset_pos_label = create_test_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 1,
-        test_padding_len=max(max_test_neg_len, max_test_pos_len),
-        train_padding_len=max(max_train_pos_len, max_train_neg_len)
+        test_padding_len=test_padding_len,
+        train_padding_len=train_padding_len
     )
 
     final_train_dataset_neg, final_train_dataset_neg_label = create_test_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 0,
-        test_padding_len=max(max_test_neg_len, max_test_pos_len),
-        train_padding_len=max(max_train_pos_len, max_train_neg_len)
+        test_padding_len=test_padding_len,
+        train_padding_len=train_padding_len
     )
 
     attack_test_data_x = np.vstack((final_train_dataset_pos, final_train_dataset_neg))
@@ -637,8 +645,10 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
     classifier_predictions = attack_classifier.predict(classifier_test_data)
 
-    print_experiment(args.env, args.seed, args.attack_threshold, None,
-                     args.attack_training_size)
+    print_experiment(args.env, args.seed, args.attack_thresholds, None,
+                     args.attack_sizes)
     #At the moment we only test the classifier against positive pairs
-    return generate_metrics(classifier_predictions, [item[-1] for item in attack_test_pairs], args.attack_threshold,
-                            args.attack_training_size)
+    # TODO: attack_thresholds, and attack_sizes are lists of arguments, is that a correct view? 
+    # are we going to iterate through those parameters to generate metrics?
+    return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0],
+                            args.attack_sizes[0])

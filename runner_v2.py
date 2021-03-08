@@ -209,9 +209,11 @@ if __name__ == "__main__":
     parser.add_argument("--buffer_name", default="Robust")                                          # Prepends name to filename
 
     parser.add_argument("--eval_freq", default=5e3, type=float)                                     # How often (time steps) we evaluate
-    parser.add_argument("--max_timesteps", default=1e6,
+    parser.add_argument("--max_timesteps", default=int(1e6),
                         type=int)                           # Max time steps to run environment or train for (this defines buffer size)
-    parser.add_argument("--start_timesteps", default=25e3,
+
+    # TODO: FixMe: should we tweak start_timesteps for different max_timesteps?
+    parser.add_argument("--start_timesteps", default=int(25e3),
                         type=int) # Time steps initial random policy is used before training behavioral
     parser.add_argument("--rand_action_p", default=0.3,
                         type=float)  # Probability of selecting random action during batch generation
@@ -282,9 +284,9 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    max_action = float(env.action_space.high[0])
+    state_dim = env.observation_space.shape[0]  # for Hopper-v3, state_dim == 11
+    action_dim = env.action_space.shape[0]  # for Hopper-v3, action_dim == 3
+    max_action = float(env.action_space.high[0])  # for Hopper-v3, max_action == 1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
