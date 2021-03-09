@@ -17,6 +17,19 @@ from pandas import DataFrame
 from utils.helpers import cleanup, print_experiment, generate_pairs, get_models
 
 
+# anonymous function to randomly select a number of items in an np.array
+RAND_SELEC_FUNC = lambda data, num: np.random.choice(data, num, replace=False)
+
+def get_random_seqs(seq_source, seq_size, eval_size):
+    # To randomly select train, test, and eval items, we need to cache train and test first,
+    # then remove the selected ones from the entire list, and then select eval ones
+    source = list(range(seq_source))
+    seq_selected = RAND_SELEC_FUNC(source, seq_size)
+    # we need to remove the selected items before we select eval seq
+    source = [val for val in source if val not in seq_selected]
+    eval_seq_selected = RAND_SELEC_FUNC(source, eval_size)
+    return seq_selected, eval_seq_selected
+
 def get_trajectory(seed, index, trajectory_length):
     path = "tmp/"
     npy_train = path + str(seed) + '_' + str(trajectory_length) + '.npy'
@@ -99,23 +112,32 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     if args.out_traj_size < test_num_trajectories:
         test_num_trajectories = args.out_traj_size
 
+    # To randomize the selection of train trajectories, we need to determine the train_size
+    # TODO: make this configurable the same as out_traj_size. For now, it is equal to args.out_traj_size
+    # TODO: This following also depends on the attack-size. not sure how though!
+    train_num_trajectories = test_num_trajectories * 3
+
     #Choosing 80% of input trajectories for training and the rest of evaluation
     train_size = math.floor(train_num_trajectories * 0.80)
-    eval_train_size = range(train_size, train_num_trajectories)
+    eval_train_size = train_num_trajectories - train_size
 
     # Choosing 80% of output trajectories for training and the rest of evaluation
     test_size = math.floor(test_num_trajectories * 0.80)
-    eval_test_size = range(test_size, test_num_trajectories)
+    eval_test_size = test_num_trajectories - test_size
 
-    final_train_dataset = None
-    final_train_dataset_label = None
     # Loading test/train buffers
     test_seq_buffer = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))
     train_seq_buffer = np.ravel(np.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))
+
+    test_traj_indecies, test_eval_indicies = get_random_seqs(len(test_trajectories_end_index) - 1, test_size, eval_test_size)
+    train_traj_indecies, train_eval_indicies = get_random_seqs(len(train_trajectories_end_index) - 1, train_size, eval_train_size)
+
+    final_train_dataset = None
+    final_train_dataset_label = None
     print(f"creating training_pairs...")
     # TODO: a refactoring is needed here, as there are lot of duplication in the process!
     # Pairing the entire training with test in the broadcast fashion
-    for j in range(test_size):
+    for j in test_traj_indecies:
         #Pairing the entire train set with the j-th test trajectory
         if j == 0:
             test_seq = test_seq_buffer[0:test_trajectories_end_index[j]:1]
@@ -125,7 +147,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
         # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
         # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
         test_seq = pad_traj(test_seq, test_padding_len)
-        for i in range(train_size):
+        for i in train_traj_indecies:
             # TODO seems like start states are of type ndarray, add checks if it was not the case later on.
             start_seq = np.concatenate((np.asarray(train_start_states[i]), np.asarray(test_start_states[j])))
             if i == 0:
@@ -162,7 +184,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     # Pairing the eval training with test in the broadcast fashion
     print(f"creating eval_pairs...")
     # eval_test_size is a range function covering the last 20% of the test trajectories
-    for j in eval_test_size:
+    for j in test_eval_indicies:
         # First index is a corner case that only happens if the entire length of a trajectory is 1
         first_index = test_trajectories_end_index[j-1] if j > 0 else 0
         test_seq = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))[
@@ -174,7 +196,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
         
         # Pairing the entire train set with the j-th test trajectory
         # eval_train_size is a range function covering the last 20% of the train trajectories
-        for i in eval_train_size:
+        for i in train_eval_indicies:
             # TODO seems like start states are of type ndarray, add checks if it was not the case later on.
             start_seq = np.concatenate((np.asarray(train_start_states[i]), np.asarray(test_start_states[j])))
             
@@ -259,15 +281,23 @@ def create_test_pairs(
     print(f"number of test trajectories is {test_num_trajectories}")
     if 10 < test_num_trajectories:
         test_num_trajectories = 10
+    # bounding trian trajectories number.
+    # TODO: Change to a configurable one
+    # TODO: The following depends on the attack_size
+    train_num_trajectories = test_num_trajectories * 3
 
     final_train_dataset = None
     final_train_dataset_label = None
 
     test_seq_buffer = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))
     train_seq_buffer = np.ravel(np.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))
+
+    test_traj_indecies, _ = get_random_seqs(len(test_trajectories_end_index) - 1, test_num_trajectories, 0)
+    train_traj_indecies, _ = get_random_seqs(len(train_trajectories_end_index) - 1, train_num_trajectories, 0)
+
     print(f"creating test pairs...")
     # Pairing the entire training with test in the broadcast fashion
-    for j in range(test_num_trajectories):
+    for j in test_traj_indecies:
         #Pairing the entire train set with the j-th test trajectory
         if j == 0:
             test_seq = test_seq_buffer[0:test_trajectories_end_index[j]:1]
@@ -278,7 +308,7 @@ def create_test_pairs(
         # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
         test_seq = pad_traj(test_seq, test_padding_len)
 
-        for i in range(train_num_trajectories):
+        for i in train_traj_indecies:
             # TODO seems like start states are of type ndarray, add checks if it was not the case later on.
             start_seq = np.concatenate((np.asarray(train_start_states[i]), np.asarray(test_start_states[j])))
             if i == 0:
@@ -647,8 +677,11 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
 
     print_experiment(args.env, args.seed, args.attack_thresholds, None,
                      args.attack_sizes)
+    
+    # NOTE: number of prediction cannot be more than then number of rows in attack_test_data_x
+    num_rows, num_columns = attack_test_data_x.shape
+    num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
     #At the moment we only test the classifier against positive pairs
     # TODO: attack_thresholds, and attack_sizes are lists of arguments, is that a correct view? 
     # are we going to iterate through those parameters to generate metrics?
-    return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0],
-                            args.attack_sizes[0])
+    return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)
