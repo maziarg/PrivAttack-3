@@ -13,12 +13,11 @@ from scipy.stats.mstats import gmean
 
 from pandas import DataFrame
 
-
 from utils.helpers import cleanup, print_experiment, generate_pairs, get_models
-
 
 # anonymous function to randomly select a number of items in an np.array
 RAND_SELEC_FUNC = lambda data, num: np.random.choice(data, num, replace=False)
+
 
 def get_random_seqs(seq_source, seq_size, eval_size):
     # To randomly select train, test, and eval items, we need to cache train and test first,
@@ -29,6 +28,7 @@ def get_random_seqs(seq_source, seq_size, eval_size):
     source = [val for val in source if val not in seq_selected]
     eval_seq_selected = RAND_SELEC_FUNC(source, eval_size)
     return seq_selected, eval_seq_selected
+
 
 def get_trajectory(seed, index, trajectory_length):
     path = "tmp/"
@@ -43,6 +43,7 @@ def get_trajectory_test(seed, index, trajectory_length):
 
     return np.load(npy_test, 'r', allow_pickle=True)[index]
 
+
 def get_max_trajectory_length(traj_index_list):
     """
     from the list of trajectory end indexes, determines the maximut trajectory length
@@ -54,6 +55,7 @@ def get_max_trajectory_length(traj_index_list):
         previous_index = index
     return max_length
 
+
 def pad_traj(traj, padd_len):
     """adds padding to a trajectory"""
     if not isinstance(traj, np.ndarray):
@@ -62,8 +64,10 @@ def pad_traj(traj, padd_len):
     test_seq = np.concatenate((traj, padding_element))
     return test_seq
 
-def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, args, label, max_traj_len=False, train_padding_len=0, test_padding_len=0):
-    #To create trajectory pairs
+
+def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, args, label, max_traj_len=False,
+                       train_padding_len=0, test_padding_len=0):
+    # To create trajectory pairs
     # For label 1, I need to pair train and test from seed 0 
     # For label 0, I need to pair test from seed 0 and train from seed 1
     # evidence == test == seed 0 
@@ -80,7 +84,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     print("creating input-output pairs...")
     # Load buffer
     buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
-    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}" # BCQ output
+    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}"  # BCQ output
 
     print("loading train trajectories...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
@@ -117,7 +121,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     # TODO: This following also depends on the attack-size. not sure how though!
     train_num_trajectories = test_num_trajectories * 3
 
-    #Choosing 80% of input trajectories for training and the rest of evaluation
+    # Choosing 80% of input trajectories for training and the rest of evaluation
     train_size = math.floor(train_num_trajectories * 0.80)
     eval_train_size = train_num_trajectories - train_size
 
@@ -129,8 +133,10 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     test_seq_buffer = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))
     train_seq_buffer = np.ravel(np.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))
 
-    test_traj_indecies, test_eval_indicies = get_random_seqs(len(test_trajectories_end_index) - 1, test_size, eval_test_size)
-    train_traj_indecies, train_eval_indicies = get_random_seqs(len(train_trajectories_end_index) - 1, train_size, eval_train_size)
+    test_traj_indecies, test_eval_indicies = get_random_seqs(len(test_trajectories_end_index) - 1, test_size,
+                                                             eval_test_size)
+    train_traj_indecies, train_eval_indicies = get_random_seqs(len(train_trajectories_end_index) - 1, train_size,
+                                                               eval_train_size)
 
     final_train_dataset = None
     final_train_dataset_label = None
@@ -138,11 +144,11 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     # TODO: a refactoring is needed here, as there are lot of duplication in the process!
     # Pairing the entire training with test in the broadcast fashion
     for j in test_traj_indecies:
-        #Pairing the entire train set with the j-th test trajectory
+        # Pairing the entire train set with the j-th test trajectory
         if j == 0:
             test_seq = test_seq_buffer[0:test_trajectories_end_index[j]:1]
         else:
-            test_seq = test_seq_buffer[test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1]
+            test_seq = test_seq_buffer[test_trajectories_end_index[j - 1]:test_trajectories_end_index[j]:1]
         # Padding test trajectories till the maximum length trajectory achieves
         # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
         # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
@@ -154,7 +160,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
                 # TODO: Does it make sense to load this file every time? What is the impact on memory/performance here?
                 train_seq = train_seq_buffer[0:train_trajectories_end_index[i]:1]
             else:
-                train_seq = train_seq_buffer[train_trajectories_end_index[i-1]:train_trajectories_end_index[i]:1]
+                train_seq = train_seq_buffer[train_trajectories_end_index[i - 1]:train_trajectories_end_index[i]:1]
             # Padding train trajectories
             train_seq = pad_traj(train_seq, train_padding_len)
             # Putting start seq, train and test trajectories together
@@ -174,7 +180,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
             # vertically stack the trajectories to be fed into xgboost or anothe classifier
             final_train_dataset = complete_traj_seq if not isinstance(
                 final_train_dataset, np.ndarray) else np.vstack((final_train_dataset, complete_traj_seq))
-    
+
     # we save a tuple of trajectories and lables. XGBoost needs a matrix of data and label
     final_train_dataset = (final_train_dataset, final_train_dataset_label)
     print(f"Done creating training_pairs!")
@@ -186,25 +192,25 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     # eval_test_size is a range function covering the last 20% of the test trajectories
     for j in test_eval_indicies:
         # First index is a corner case that only happens if the entire length of a trajectory is 1
-        first_index = test_trajectories_end_index[j-1] if j > 0 else 0
+        first_index = test_trajectories_end_index[j - 1] if j > 0 else 0
         test_seq = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))[
-            first_index:test_trajectories_end_index[j]:1]
+                   first_index:test_trajectories_end_index[j]:1]
         # Padding test trajectories till the maximum length trajectory achieves
         # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
         # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
         test_seq = pad_traj(test_seq, test_padding_len)
-        
+
         # Pairing the entire train set with the j-th test trajectory
         # eval_train_size is a range function covering the last 20% of the train trajectories
         for i in train_eval_indicies:
             # TODO seems like start states are of type ndarray, add checks if it was not the case later on.
             start_seq = np.concatenate((np.asarray(train_start_states[i]), np.asarray(test_start_states[j])))
-            
+
             # First index is a corner case that only happens if the entire length of a trajectory is 1
-            first_index = train_trajectories_end_index[i-1] if i > 0 else 0
+            first_index = train_trajectories_end_index[i - 1] if i > 0 else 0
             train_seq = np.ravel(np.load(
                 f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))[
-                    first_index:train_trajectories_end_index[i]:1]
+                        first_index:train_trajectories_end_index[i]:1]
             # Padding train trajectories
             train_seq = pad_traj(train_seq, train_padding_len)
             # Putting start seq, train and test trajectories together
@@ -223,18 +229,18 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
             # vertically stack the trajectories to be fed into xgboost or anothe classifier
             final_eval_dataset = complete_traj_seq if not isinstance(
                 final_eval_dataset, np.ndarray) else np.vstack((final_eval_dataset, complete_traj_seq))
-    
+
     # we save a tuple of trajectories and lables. XGBoost needs a matrix of data and label
     final_eval_dataset = (final_eval_dataset, final_eval_dataset_label)
     print(f"Done creating eval_pairs!")
 
     return final_train_dataset, final_eval_dataset
 
-#starting the attack test sequence genration
-def create_test_pairs(
-    attack_path, state_dim, action_dim, max_action, device, args, label, 
-    max_traj_len=False, train_padding_len=0, test_padding_len=0):
 
+# starting the attack test sequence genration
+def create_test_pairs(
+        attack_path, state_dim, action_dim, max_action, device, args, label,
+        max_traj_len=False, train_padding_len=0, test_padding_len=0):
     if label:
         train_seed = int(args.seed[2])
         test_seed = int(args.seed[2])
@@ -245,12 +251,12 @@ def create_test_pairs(
     # if not os.path.exists(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/"):
     #     os.makedirs(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/")
 
-    #To create trajectory pairs
+    # To create trajectory pairs
     print("creating input-output pairs...")
     # Load buffer
     buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
     buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}"  # BCQ output
-    
+
     print("loading input trajectories...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
     replay_buffer_train.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}")
@@ -298,11 +304,11 @@ def create_test_pairs(
     print(f"creating test pairs...")
     # Pairing the entire training with test in the broadcast fashion
     for j in test_traj_indecies:
-        #Pairing the entire train set with the j-th test trajectory
+        # Pairing the entire train set with the j-th test trajectory
         if j == 0:
             test_seq = test_seq_buffer[0:test_trajectories_end_index[j]:1]
         else:
-            test_seq = test_seq_buffer[test_trajectories_end_index[j-1]:test_trajectories_end_index[j]:1]
+            test_seq = test_seq_buffer[test_trajectories_end_index[j - 1]:test_trajectories_end_index[j]:1]
         # Padding test trajectories till the maximum length trajectory achieves
         # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
         # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
@@ -315,7 +321,7 @@ def create_test_pairs(
                 # TODO: Does it make sense to load this file every time? What is the impact on memory/performance here?
                 train_seq = train_seq_buffer[0:train_trajectories_end_index[i]:1]
             else:
-                train_seq = train_seq_buffer[train_trajectories_end_index[i-1]:train_trajectories_end_index[i]:1]
+                train_seq = train_seq_buffer[train_trajectories_end_index[i - 1]:train_trajectories_end_index[i]:1]
 
             # Padding train trajectories
             train_seq = pad_traj(train_seq, train_padding_len)
@@ -340,12 +346,12 @@ def create_test_pairs(
     # we save a tuple of trajectories and lables. XGBoost needs a matrix of data and label
     final_train_dataset = (final_train_dataset, final_train_dataset_label)
 
-            # temp_sequence = np.concatenate((temp_sequence, np.reshape(label, (1, 1))), axis=0)
-            # with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/test_{args.out_traj_size}.npy", 'ab') \
-            #         as f:
-            #     np.save(f, temp_sequence)
-            # final_prediction_test_dataset.append(temp_sequence)
-            # temp_sequence = []
+    # temp_sequence = np.concatenate((temp_sequence, np.reshape(label, (1, 1))), axis=0)
+    # with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/test_{args.out_traj_size}.npy", 'ab') \
+    #         as f:
+    #     np.save(f, temp_sequence)
+    # final_prediction_test_dataset.append(temp_sequence)
+    # temp_sequence = []
     print(f"Done creating test pairs!")
 
     return final_train_dataset
@@ -368,7 +374,7 @@ def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_p
     labels_eval = np.empty(eval_size, dtype=int)
     data_test = np.empty([0, data_length])
     labels_test = []
-    #train and test pair inedcies
+    # train and test pair inedcies
     train_pairs, test_pairs = generate_pairs(total_pairs_needed, len(seeds) * num_traj_per_model, num_predictions,
                                              attack_training_size)
 
@@ -460,13 +466,13 @@ def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_p
     return d_t, l_t, d_e, l_e, d_test, labels_test
 
 
-def logger(baseline, false_negatives_bl, false_positives_bl, rmse, accuracy, false_negatives, false_positives):
+def logger(baseline, precision_bl, recall_bl, rmse, accuracy, precision, recall):
     print("Baseline Accuracy: ", baseline)
-    print("Precision BL: ", false_negatives_bl)
-    print("Recall BL: ", false_positives_bl)
+    print("Precision BL: ", precision_bl)
+    print("Recall BL: ", recall_bl)
     print("Attack Classifier Accuracy: ", accuracy)
-    print("Precision: ", false_negatives)
-    print("Recall: ", false_positives)
+    print("Precision: ", precision)
+    print("Recall: ", recall)
     print("Root MSE: ", rmse)
     print("****************************")
 
@@ -485,34 +491,45 @@ def calc_errors(classifier_predictions, labels_test, threshold, num_predictions)
 
 
 def baseline_accuracy(labels_test, num_predictions):
-    num_correct = 0
+    # num_correct = 0
     false_positives = 0
     false_negatives = 0
+    true_positives = 0
+    true_negatives = 0
     for i in range(num_predictions):
         guess = randint(0, 1)
 
-        # if theyre the same
+        # if they're the same
         if guess == labels_test[i]:
-            num_correct += 1
-        # said out was acutually in
+            # num_correct += 1
+            if labels_test[i] == 1:
+                true_positives += 1
+            else:
+                true_negatives += 1
+        # said out was actually in
         elif guess == 0 and labels_test[i] == 1:
             false_negatives += 1
         elif guess == 1 and labels_test[i] == 0:
             false_positives += 1
 
-    return output_prec_recall((num_correct / num_predictions), (false_negatives / num_predictions),
-                              (false_positives / num_predictions))
+    # return output_prec_recall((num_correct / num_predictions), (false_negatives / num_predictions),
+    #                           (false_positives / num_predictions))
+    return output_prec_recall(true_positives, true_negatives, false_negatives, false_positives, num_predictions)
 
 
 def accuracy_report(classifier_predictions, labels_test, threshold, num_predictions):
-    num_correct = 0
+    # num_correct = 0
     false_positives = 0
     false_negatives = 0
+    true_positives = 0
+    true_negatives = 0
     for i in range(num_predictions):
         if classifier_predictions[i] >= threshold and labels_test[i] == 1:
-            num_correct += 1
+            # num_correct += 1
+            true_positives += 1
         elif classifier_predictions[i] < threshold and labels_test[i] == 0:
-            num_correct += 1
+            # num_correct += 1
+            true_negatives += 1
 
         # false negative (classifier is saying out but labels say in)
         elif classifier_predictions[i] < threshold and labels_test[i] == 1:
@@ -521,30 +538,39 @@ def accuracy_report(classifier_predictions, labels_test, threshold, num_predicti
         # false positive (classifier is saying in but labels say out)
         elif classifier_predictions[i] >= threshold and labels_test[i] == 0:
             false_positives += 1
-    print(f"num_correct={num_correct}, false_positive={false_positives}, false_negative={false_negatives}")
-    return output_prec_recall((num_correct / num_predictions), (false_negatives / num_predictions),
-                              (false_positives / num_predictions))
+    print(f"true_positive={true_positives}, true_negative={true_negatives}, false_positive={false_positives}"
+          f",false_negative={false_negatives}")
+    # return output_prec_recall((num_correct / num_predictions), (false_negatives / num_predictions),
+    #                           (false_positives / num_predictions))
+    return output_prec_recall(true_positives, true_negatives, false_negatives, false_positives, num_predictions)
 
 
-def output_prec_recall(acc, fn, fp):
-    tp = int(500 * acc)
-    fn = int(500 * fn)
-    fp = int(500 * fp)
+def output_prec_recall(tp, tn, fn, fp, total):
+    # tp = int(500 * acc)
+    # fn = int(500 * fn)
+    # fp = int(500 * fp)
+    num_correct = tp + tn
 
+    acc = num_correct / total
     prec = tp / (tp + fp)
     recall = tp / (tp + fn)
 
-    return acc, round(prec, 3), round(recall, 3)
+    return round(acc, 3), round(prec, 3), round(recall, 3)
 
 
 def generate_metrics(classifier_predictions, labels_test, threshold, num_predictions):
-    accuracy, false_negatives, false_positives = accuracy_report(classifier_predictions, labels_test, threshold,
+    # accuracy, false_negatives, false_positives = accuracy_report(classifier_predictions, labels_test, threshold,
+    #                                                              num_predictions)
+    accuracy, precision, recall = accuracy_report(classifier_predictions, labels_test, threshold,
                                                                  num_predictions)
-    baseline, false_negatives_bl, false_positives_bl = baseline_accuracy(labels_test, num_predictions)
+    # baseline, false_negatives_bl, false_positives_bl = baseline_accuracy(labels_test, num_predictions)
+    accuracy_bl, precision_bl, recall_bl = baseline_accuracy(labels_test, num_predictions)
     RMSE_e_i = rsme(calc_errors(classifier_predictions, labels_test, threshold, num_predictions))
 
-    logger(baseline, false_negatives_bl, false_positives_bl, RMSE_e_i, accuracy, false_negatives, false_positives)
-    return baseline, false_negatives_bl, false_positives_bl, RMSE_e_i, accuracy, false_negatives, false_positives
+    # logger(baseline, false_negatives_bl, false_positives_bl, RMSE_e_i, accuracy, false_negatives, false_positives)
+    logger(accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall)
+    # return baseline, false_negatives_bl, false_positives_bl, RMSE_e_i, accuracy, false_negatives, false_positives
+    return accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall
 
 
 def train_classifier(xgb_train, xgb_eval):
@@ -584,22 +610,21 @@ def train_attack_model_v2(environment, threshold, trajectory_length, seeds, atta
 
 
 def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device, args):
-    
-    # This hack should be removed after refactoring. We need to create several helper functions 
+    # This hack should be removed after refactoring. We need to create several helper functions
     # that performs a subset of create_train_pairs
     # Here we get the maximum length for both positive/negative test/train trajectories
     tp_max_train_pos_len, tp_max_test_pos_len = create_train_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
     tp_max_train_neg_len, tp_max_test_neg_len = create_train_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
-    
+
     te_max_train_pos_len, te_max_test_pos_len = create_test_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
     te_max_train_neg_len, te_max_test_neg_len = create_test_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
 
-    test_padding_len=max(tp_max_test_neg_len, tp_max_test_pos_len, te_max_test_pos_len, te_max_test_neg_len)
-    train_padding_len=max(tp_max_train_pos_len, tp_max_train_neg_len, te_max_train_pos_len, te_max_train_neg_len)
+    test_padding_len = max(tp_max_test_neg_len, tp_max_test_pos_len, te_max_test_pos_len, te_max_test_neg_len)
+    train_padding_len = max(tp_max_train_pos_len, tp_max_train_neg_len, te_max_train_pos_len, te_max_train_neg_len)
 
     # Pairing train and test trajectories
     # Feeding max length trajectory to be uesd for padding purposes
@@ -608,13 +633,13 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
         test_padding_len=test_padding_len,
         train_padding_len=train_padding_len
     )
-    
+
     attack_train_negative_data, attack_eval_negative_data = create_train_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, 0,
         test_padding_len=test_padding_len,
         train_padding_len=train_padding_len
     )
-    
+
     print("preparing train data for classifier training ...")
     # Instanciating xgboost DMatrix with positive/negative train data
     attack_train_pos_data, attack_train_pos_label = attack_train_positive_data
@@ -640,7 +665,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     #     while f.tell() < fsz:
     #         x_input = np.vstack((x_input, np.load(f)))
     # classifier_train_data = xgb.DMatrix(x_input, )  # Note that in this way, the label needs to be extracted from the arrays
-    
+
     # This part is in parallel with the above few lines WRT getting the data to be fed into XGBoost DMatrix
     # comment out if needed!
     # e_input = None
@@ -650,7 +675,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     #     while f.tell() < fsz:
     #         e_input = np.vstack((e_input, np.load(f)))
     # classifier_eval_data = xgb.DMatrix(e_input) # Note that in this way, the label needs to be extracted from the arrays
-    
+
     print("classifier training ...")
     attack_classifier = train_classifier(classifier_train_data, classifier_eval_data)
     print("training finished --> generating predictions")
@@ -677,11 +702,11 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
 
     print_experiment(args.env, args.seed, args.attack_thresholds, None,
                      args.attack_sizes)
-    
+
     # NOTE: number of prediction cannot be more than then number of rows in attack_test_data_x
     num_rows, num_columns = attack_test_data_x.shape
     num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
-    #At the moment we only test the classifier against positive pairs
+    # At the moment we only test the classifier against positive pairs
     # TODO: attack_thresholds, and attack_sizes are lists of arguments, is that a correct view? 
     # are we going to iterate through those parameters to generate metrics?
     return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)
