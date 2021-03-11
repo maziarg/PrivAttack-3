@@ -65,7 +65,7 @@ def pad_traj(traj, padd_len):
     return test_seq
 
 
-def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, args, label, max_traj_len=False,
+def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, args, label, ret_max_traj_len=False,
                        train_padding_len=0, test_padding_len=0):
     # To create trajectory pairs
     # For label 1, I need to pair train and test from seed 0 
@@ -87,13 +87,16 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}"  # BCQ output
 
     print("loading train trajectories...")
+    # TODO: do we need to control how much trajectories we load from the train/test buffers?
+    # we have a boundary anyways on the test_num_trajectories, and train_num_trajectories.
+    # I skipped it for now.
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}")
+    replay_buffer_train.load(f"./{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}")
     print("creating index set from not-done array in training set...")
 
     print("loading test trajectories...")
     replay_buffer_test = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_test.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}")
+    replay_buffer_test.load(f"./{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}")
     print("creating index set from not-done array in test set...")
 
     train_num_trajectories = replay_buffer_train.num_trajectories
@@ -109,7 +112,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     test_max_traj_len = get_max_trajectory_length(test_trajectories_end_index)
 
     # TODO: This huge hack should be removed after refactoring this part of the code!!!
-    if max_traj_len:
+    if ret_max_traj_len:
         return train_max_traj_len, test_max_traj_len
 
     # TODO: what is this ? How does it affect the system
@@ -130,8 +133,10 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     eval_test_size = test_num_trajectories - test_size
 
     # Loading test/train buffers
-    test_seq_buffer = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))
-    train_seq_buffer = np.ravel(np.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))
+    test_seq_buffer = np.ravel(np.load(
+        f"./{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy"))
+    train_seq_buffer = np.ravel(np.load(
+        f"./{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy"))
 
     test_traj_indecies, test_eval_indicies = get_random_seqs(len(test_trajectories_end_index) - 1, test_size,
                                                              eval_test_size)
@@ -193,7 +198,8 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
     for j in test_eval_indicies:
         # First index is a corner case that only happens if the entire length of a trajectory is 1
         first_index = test_trajectories_end_index[j - 1] if j > 0 else 0
-        test_seq = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))[
+        test_seq = np.ravel(np.load(
+            f"./{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy"))[
                    first_index:test_trajectories_end_index[j]:1]
         # Padding test trajectories till the maximum length trajectory achieves
         # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
@@ -209,7 +215,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
             # First index is a corner case that only happens if the entire length of a trajectory is 1
             first_index = train_trajectories_end_index[i - 1] if i > 0 else 0
             train_seq = np.ravel(np.load(
-                f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))[
+                f"./{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy"))[
                         first_index:train_trajectories_end_index[i]:1]
             # Padding train trajectories
             train_seq = pad_traj(train_seq, train_padding_len)
@@ -240,7 +246,7 @@ def create_train_pairs(attack_path, state_dim, action_dim, max_action, device, a
 # starting the attack test sequence genration
 def create_test_pairs(
         attack_path, state_dim, action_dim, max_action, device, args, label,
-        max_traj_len=False, train_padding_len=0, test_padding_len=0):
+        ret_max_traj_len=False, train_padding_len=0, test_padding_len=0):
     if label:
         train_seed = int(args.seed[2])
         test_seed = int(args.seed[2])
@@ -259,12 +265,12 @@ def create_test_pairs(
 
     print("loading input trajectories...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}")
+    replay_buffer_train.load(f"./{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}")
     print("creating index set from not-done array in training set")
 
     print("loading output trajectories...")
     replay_buffer_test = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_test.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}")
+    replay_buffer_test.load(f"./{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}")
     print("creating index set from not-done array in test set")
 
     train_num_trajectories = replay_buffer_train.num_trajectories
@@ -280,7 +286,7 @@ def create_test_pairs(
     test_max_traj_len = get_max_trajectory_length(test_trajectories_end_index)
 
     # TODO: This huge hack should be removed after refactoring this part of the code!!!
-    if max_traj_len:
+    if ret_max_traj_len:
         return train_max_traj_len, test_max_traj_len
 
     # TODO: This should not be here at all for create test pairs. However, this will bound the system
@@ -295,8 +301,10 @@ def create_test_pairs(
     final_train_dataset = None
     final_train_dataset_label = None
 
-    test_seq_buffer = np.ravel(np.load(f"./{attack_path}/{test_seed}/buffers/{buffer_name_test}_action.npy"))
-    train_seq_buffer = np.ravel(np.load(f"./{attack_path}/{train_seed}/buffers/{buffer_name_train}_action.npy"))
+    test_seq_buffer = np.ravel(np.load(
+        f"./{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy"))
+    train_seq_buffer = np.ravel(np.load(
+        f"./{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy"))
 
     test_traj_indecies, _ = get_random_seqs(len(test_trajectories_end_index) - 1, test_num_trajectories, 0)
     train_traj_indecies, _ = get_random_seqs(len(train_trajectories_end_index) - 1, train_num_trajectories, 0)
@@ -614,14 +622,14 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, max_action, device
     # that performs a subset of create_train_pairs
     # Here we get the maximum length for both positive/negative test/train trajectories
     tp_max_train_pos_len, tp_max_test_pos_len = create_train_pairs(
-        attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
+        attack_path, state_dim, action_dim, max_action, device, args, 1, ret_max_traj_len=True)
     tp_max_train_neg_len, tp_max_test_neg_len = create_train_pairs(
-        attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
+        attack_path, state_dim, action_dim, max_action, device, args, 0, ret_max_traj_len=True)
 
     te_max_train_pos_len, te_max_test_pos_len = create_test_pairs(
-        attack_path, state_dim, action_dim, max_action, device, args, 1, max_traj_len=True)
+        attack_path, state_dim, action_dim, max_action, device, args, 1, ret_max_traj_len=True)
     te_max_train_neg_len, te_max_test_neg_len = create_test_pairs(
-        attack_path, state_dim, action_dim, max_action, device, args, 0, max_traj_len=True)
+        attack_path, state_dim, action_dim, max_action, device, args, 0, ret_max_traj_len=True)
 
     test_padding_len = max(tp_max_test_neg_len, tp_max_test_pos_len, te_max_test_pos_len, te_max_test_neg_len)
     train_padding_len = max(tp_max_train_pos_len, tp_max_train_neg_len, te_max_train_pos_len, te_max_train_neg_len)

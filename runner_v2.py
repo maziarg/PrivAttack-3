@@ -25,7 +25,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
     if args.generate_buffer: policy.load(f"./{attack_path}/models/behavioral_{setting}")
 
     # Initialize buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_buff_size)
 
     evaluations = []
 
@@ -54,10 +54,13 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
         # Perform action
         next_state, reward, done, _ = env.step(action)
-        done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
+        # TODO: check if we need this line. This is because, we set max_episode step when we instantiate the env.
+        # Then, env should know it has reached the absorbing state and return done=True.
+        # In fact the code in gym, seems to be doing that.
+        # done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
 
         # Store data in replay buffer
-        replay_buffer.add(state, action, next_state, reward, done_bool)
+        replay_buffer.add(state, action, next_state, reward, float(done))
 
         state = next_state
         episode_reward += reward
@@ -104,7 +107,7 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
     policy = BCQ.BCQ(state_dim, action_dim, max_action, device, args.discount, args.tau, args.lmbda, args.phi)
 
     # Load buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_buff_size)
     replay_buffer.load(f"./{attack_path}/buffers/{buffer_name}")
 
     evaluations = []
@@ -156,7 +159,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
     policy.load(f"./{attack_path}/models/target_{setting}")
 
     # Initialize buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device)
+    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_buff_size)
     evaluations = []
 
     state, done = env.reset(), False
@@ -176,10 +179,12 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
 
         # Perform action
         next_state, reward, done, _ = env.step(action)
-        done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
+        # TODO: check if we need this line. This is because, we set max_episode step when we instantiate the env.
+        # Then, env should know we have reached that state and return done=True. In fact the code in gym, seems to be doing that.
+        # done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
 
         # Store data in replay buffer
-        replay_buffer.add(state, action, next_state, reward, done_bool)
+        replay_buffer.add(state, action, next_state, reward, float(done))
 
         state = next_state
         episode_reward += reward
@@ -207,6 +212,7 @@ if __name__ == "__main__":
     parser.add_argument("--env" , help="the environment you are in", default="Hopper-v3")           # OpenAI gym environment name
     parser.add_argument("--seed", type=int)                                              # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--buffer_name", default="Robust")                                          # Prepends name to filename
+    parser.add_argument('--max_buff_size', default=int(1e6), type=int)  # sets max_size in BCQutils.ReplayBuffer
 
     parser.add_argument("--eval_freq", default=5e3, type=float)                                     # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=int(1e6),
@@ -230,9 +236,6 @@ if __name__ == "__main__":
     parser.add_argument("--attack_threshold", default=0.75)  # Threshold for attack training
     parser.add_argument("--attack_training_size", default=0.75)  # Attack training size
 
-
-
-
     #parser.add_argument('--timesteps', type=int)
     parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str)
     parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests")
@@ -246,6 +249,7 @@ if __name__ == "__main__":
     parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
     parser.add_argument('--trajectory_length' , nargs='*', default= 1000, type = int) #Must be equal to the max_ep_length in trainer.py
+    parser.add_argument('--max_traj_len', default=1000, type=int)
 
     args = parser.parse_args()
 
@@ -253,18 +257,18 @@ if __name__ == "__main__":
 
     print("---------------------------------------")
     if args.train_behavioral:
-        print(f"Setting: Training behavioral, Env: {args.env}, Seed: {args.seed}")
+        print(f"Setting: Training behavioral, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
     elif args.generate_buffer:
-        print(f"Setting: Generating buffer, Env: {args.env}, Seed: {args.seed}")
+        print(f"Setting: Generating buffer, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
     else:
-        print(f"Setting: Training BCQ, Env: {args.env}, Seed: {args.seed}")
+        print(f"Setting: Training BCQ, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
     print("---------------------------------------")
 
     if args.train_behavioral and args.generate_buffer:
         print("Train_behavioral and generate_buffer cannot both be true.")
         exit()
 
-    attack_path = f"{args.env}/{args.max_timesteps}/{args.seed}"
+    attack_path = f"{args.env}/{args.max_timesteps}/{args.seed}/{args.max_traj_len}"
 
     if not os.path.exists(f"./{attack_path}/results"):
         os.makedirs(f"./{attack_path}/results")
@@ -281,6 +285,8 @@ if __name__ == "__main__":
     env = gym.make(args.env)
 
     env.seed(args.seed)
+    # Bounding the maximum allowed trajectory length in the environment
+    env._max_episode_steps = args.max_traj_len
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 

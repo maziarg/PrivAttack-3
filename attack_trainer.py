@@ -21,6 +21,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed", nargs=4, type=int)                          # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
 
+    # TODO: wire this in the worker/attack.py if need be!
+    parser.add_argument('--max_buff_size', default=int(1e6), type=int)  # sets max_size in BCQutils.ReplayBuffer
+
     parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=1e6,
                         type=int)   # Max time steps to run environment or train for (this defines buffer size)
@@ -51,8 +54,8 @@ if __name__ == "__main__":
                         help="size of the training set for the attack model")
     parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
-    parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  #Must be equal to the max_
-    # ep_length in trainer.py
+    parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  #Must be equal to the max_ep_length in trainer.py
+    parser.add_argument('--max_traj_len' , default=1000, type=int)
 
     args = parser.parse_args()
 
@@ -69,7 +72,7 @@ if __name__ == "__main__":
     #         raise
 
     print("---------------------------------------")
-    print(f"Setting: Training Attack, Env: {args.env}, Seed: {args.seed}")
+    print(f"Setting: Training Attack, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
 
     attack_path = f"{args.env}/{args.max_timesteps}"
 
@@ -79,6 +82,9 @@ if __name__ == "__main__":
     # Though the usage of a single seed does not affect state_dim, action_dim, max_action.
     # TODO: would this usage model affect other parts of the code?
     env.seed(args.seed[0])
+    # Bounding the maximum allowed trajectory length in the environment.
+    # This is modified here for consistency with runner_v2. It seems that it is not affecting attack_trainer!
+    env._max_episode_steps = args.max_traj_len
     torch.manual_seed(args.seed[0])
     np.random.seed(args.seed[0])
 
