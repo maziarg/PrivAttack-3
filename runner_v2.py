@@ -54,7 +54,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
         # Perform action
         next_state, reward, done, _ = env.step(action)
-        # TODO: check if we need this line. This is because, we set max_episode step when we instantiate the env.
+        # TODO: check if we need this line. This is because, we set max_episode step when we instantiate the env. Susan: I don't think we need it. I checked it and it works with different max_traj_length
         # Then, env should know it has reached the absorbing state and return done=True.
         # In fact the code in gym, seems to be doing that.
         # done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
@@ -179,7 +179,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
 
         # Perform action
         next_state, reward, done, _ = env.step(action)
-        # TODO: check if we need this line. This is because, we set max_episode step when we instantiate the env.
+        # TODO: check if we need this line. This is because, we set max_episode step when we instantiate the env. Susan: No need to double check "done". The max_episode step is taking care of it.
         # Then, env should know we have reached that state and return done=True. In fact the code in gym, seems to be doing that.
         # done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
 
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_timesteps", default=int(1e6),
                         type=int)                           # Max time steps to run environment or train for (this defines buffer size)
 
-    # TODO: FixMe: should we tweak start_timesteps for different max_timesteps?
+    # TODO: FixMe: should we tweak start_timesteps for different max_timesteps? Susan: Even if such a thing is needed, it will be taken care of during the hyper parameter tuning
     parser.add_argument("--start_timesteps", default=int(25e3),
                         type=int) # Time steps initial random policy is used before training behavioral
     parser.add_argument("--rand_action_p", default=0.3,
@@ -233,36 +233,36 @@ if __name__ == "__main__":
     parser.add_argument("--train_behavioral", action="store_true")  # If true, train behavioral (DDPG)
     parser.add_argument("--train_policy", action="store_true")  # If true, train policy (BCQ)
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
-    parser.add_argument("--attack_threshold", default=0.75)  # Threshold for attack training
-    parser.add_argument("--attack_training_size", default=0.75)  # Attack training size
+    parser.add_argument("--attack_threshold", default=0.75)  # Threshold for attack training #TODO: Not needed in this file
+    parser.add_argument("--attack_training_size", default=0.75)  # Attack training size #TODO: Not needed in this file. Also, the default must be different. 0.75 does not make sense.
 
     #parser.add_argument('--timesteps', type=int)
-    parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str)
-    parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests")
-    parser.add_argument('--fix_num_models', default='no')
+    parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str) #TODO: ToMySelf: Check what it does
+    parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests") #TODO: ToMySelf: Check what it does
+    parser.add_argument('--fix_num_models', default='no') #TODO: Not needed in this file
     #parser.add_argument('--threshold', default=0.5, type=float)
-    parser.add_argument('--threshold_arr', nargs= '*', type=float)
-    parser.add_argument('--num_models', default=3, help="number of models to use", type=int)
+    parser.add_argument('--threshold_arr', nargs= '*', type=float) #TODO: ToMySelf: Check what it does
+    parser.add_argument('--num_models', default=3, help="number of models to use", type=int) #TODO: Not needed in this file. May not be needed in the other file either.
     #parser.add_argument('--traj_length', default=1000, help="length of trajectory", type=int)
     parser.add_argument('--attack_model_size', default=1000, type=int,
-                        help="size of the training set for the attack model")
-    parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
-    parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
-    parser.add_argument('--trajectory_length' , nargs='*', default= 1000, type = int) #Must be equal to the max_ep_length in trainer.py
+                        help="size of the training set for the attack model") #TODO: Not needed in this file
+    parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed") #TODO: ToMySelf: Check what it does
+    parser.add_argument('--model', default='sac', help="model used to train the shadow_models") #TODO: probably must be removed
+    parser.add_argument('--trajectory_length' , nargs='*', default= 1000, type = int) #Must be equal to the max_ep_length in trainer.py #TODO: The comment must be removed. We probably do not need the argument
     parser.add_argument('--max_traj_len', default=1000, type=int)
 
     args = parser.parse_args()
 
     ######BCQ Implementation Starts Here#########
 
-    print("---------------------------------------")
+    print(50*"-")
     if args.train_behavioral:
         print(f"Setting: Training behavioral, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
     elif args.generate_buffer:
         print(f"Setting: Generating buffer, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
     else:
         print(f"Setting: Training BCQ, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
-    print("---------------------------------------")
+    print(50*"-")
 
     if args.train_behavioral and args.generate_buffer:
         print("Train_behavioral and generate_buffer cannot both be true.")
