@@ -25,7 +25,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
     if args.generate_buffer: policy.load(f"./{attack_path}/models/behavioral_{setting}")
 
     # Initialize buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_buff_size)
+    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
 
     evaluations = []
 
@@ -107,7 +107,7 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
     policy = BCQ.BCQ(state_dim, action_dim, max_action, device, args.discount, args.tau, args.lmbda, args.phi)
 
     # Load buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_buff_size)
+    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
     replay_buffer.load(f"./{attack_path}/buffers/{buffer_name}")
 
     evaluations = []
@@ -159,7 +159,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
     policy.load(f"./{attack_path}/models/target_{setting}")
 
     # Initialize buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_buff_size)
+    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
     evaluations = []
 
     state, done = env.reset(), False
@@ -212,7 +212,6 @@ if __name__ == "__main__":
     parser.add_argument("--env" , help="the environment you are in", default="Hopper-v3")           # OpenAI gym environment name
     parser.add_argument("--seed", type=int)                                              # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--buffer_name", default="Robust")                                          # Prepends name to filename
-    parser.add_argument('--max_buff_size', default=int(1e6), type=int)  # sets max_size in BCQutils.ReplayBuffer
 
     parser.add_argument("--eval_freq", default=5e3, type=float)                                     # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=int(1e6),

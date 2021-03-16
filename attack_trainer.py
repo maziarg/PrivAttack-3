@@ -21,9 +21,6 @@ if __name__ == "__main__":
     parser.add_argument("--seed", nargs=4, type=int)                          # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
 
-    # TODO: wire this in the worker/attack.py if need be!
-    parser.add_argument('--max_buff_size', default=int(1e6), type=int)  # sets max_size in BCQutils.ReplayBuffer
-
     parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=1e6,
                         type=int)   # Max time steps to run environment or train for (this defines buffer size)
