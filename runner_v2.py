@@ -82,7 +82,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
         # Evaluate episode
         if args.train_behavioral and (t + 1) % args.eval_freq == 0:
-            evaluations.append(eval_policy(policy, args.env, args.seed))
+            evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
             np.save(f"./{attack_path}/results/behavioral_{setting}", evaluations)
             policy.save(f"./{attack_path}/models/behavioral_{setting}")
 
@@ -92,7 +92,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
     # Save final buffer and performance
     else:
-        evaluations.append(eval_policy(policy, args.env, args.seed))
+        evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
         np.save(f"./{attack_path}/results/buffer_performance_{setting}", evaluations)
         replay_buffer.save(f"./{attack_path}/buffers/{buffer_name}")
 
@@ -118,7 +118,7 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
     while training_iters < args.max_timesteps:
         pol_vals = policy.train(replay_buffer, iterations=int(args.eval_freq), batch_size=args.batch_size)
 
-        evaluations.append(eval_policy(policy, args.env, args.seed))
+        evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
         np.save(f"./{attack_path}/results/BCQ_{setting}", evaluations)
 
         training_iters += args.eval_freq
@@ -128,9 +128,12 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, eval_episodes=10):
+def eval_policy(policy, env_name, seed, eval_episodes=10, max_episode_step=None):
     eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
+    # Bounding the maximum allowed trajectory length in the environment
+    if max_episode_step:
+        env._max_episode_steps = max_episode_step
 
     avg_reward = 0.
     for _ in range(eval_episodes):
@@ -201,7 +204,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
             episode_num += 1
 
     # Save final buffer and performance
-    evaluations.append(eval_policy(policy, args.env, args.seed))
+    evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
     np.save(f"./{attack_path}/results/target_buffer_performance_{setting}", evaluations)
     replay_buffer.save(f"./{attack_path}/buffers/{buffer_name}")
 
