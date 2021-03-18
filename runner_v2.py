@@ -133,7 +133,7 @@ def eval_policy(policy, env_name, seed, eval_episodes=10, max_episode_step=None)
     eval_env.seed(seed + 100)
     # Bounding the maximum allowed trajectory length in the environment
     if max_episode_step:
-        env._max_episode_steps = max_episode_step
+        eval_env._max_episode_steps = max_episode_step
 
     avg_reward = 0.
     for _ in range(eval_episodes):
