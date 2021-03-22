@@ -1,18 +1,19 @@
 import argparse
-from utils.configs import *
-
-import argparse
-import gym
-import numpy as np
 import os
-import torch
 # import yaml
 
 import BCQ
-import DDPG
 import BCQutils
-
+import DDPG
 from workers import attack, experiment
+from utils.configs import *
+from utils.helpers import str2bool
+
+
+import gym
+import numpy as np
+import torch
+
 
 if __name__ == "__main__":
 
@@ -40,8 +41,8 @@ if __name__ == "__main__":
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
     parser.add_argument("--attack_thresholds", nargs='*', type=float)  # Threshold for attack training
     parser.add_argument("--attack_sizes", nargs='*', type=int)  # Attack training size
-    parser.add_argument('--out_traj_size', default=10, type=int)
-
+    parser.add_argument('--out_traj_size', default=10, type=int)  # This is used to bound the number of test trajecotries
+    parser.add_argument('--in_traj_size', default=10, type=int)  # This is used to bound the number of train trajectories
 
     parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str)
     parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests")
@@ -52,7 +53,9 @@ if __name__ == "__main__":
     parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
     parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  #Must be equal to the max_ep_length in trainer.py
-    parser.add_argument('--max_traj_len' , default=1000, type=int)
+    parser.add_argument('--max_traj_len', default=1000, type=int)
+    parser.add_argument('--correlated', action="store_true", help="Activate correlated mode.")  # without it, decorrelated mode is going to run
+    parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
 
     args = parser.parse_args()
 
@@ -87,11 +90,12 @@ if __name__ == "__main__":
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
+    # Remove as it is not used in this step
     max_action = float(env.action_space.high[0])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    experiment.run_experiments_v2(attack_path, state_dim, action_dim, max_action, device, args)
+    experiment.run_experiments_v2(attack_path, state_dim, action_dim, device, args)
 
 
     #training_iters = 0
