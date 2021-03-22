@@ -143,16 +143,16 @@ def create_pairs(
     train_seq_buffer = np.ravel(np.load(
         f"./{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy"))
 
-    if args.correlated:
+    if args.decorrelated:
+        return generate_decorrelated_train_eval_pairs(
+                test_seq_buffer, train_seq_buffer, train_start_states, test_start_states,
+                test_size, train_size, eval_test_size, eval_train_size, args.max_traj_len, label, do_train=do_train
+        )
+    else:
         return generate_correlated_train_eval_pairs(
                 test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index,
                 test_size, train_size, eval_test_size, eval_train_size, test_padding_len, train_padding_len,
                 train_start_states, test_start_states, label, do_train=do_train
-        )
-    else:
-        return generate_decorrelated_train_eval_pairs(
-                test_seq_buffer, train_seq_buffer, train_start_states, test_start_states,
-                test_size, train_size, eval_test_size, eval_train_size, args.max_traj_len, label, do_train=do_train
         )
 
 
@@ -562,14 +562,13 @@ def get_pairs_max_traj_len(attack_path, state_dim, action_dim, device, args):
 
 def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     
-    if args.correlated:
+    if args.decorrelated:
+        # In decorrelated mode, we use the given max_traj_len as the maximum trajectory length
+        test_padding_len = train_padding_len = args.max_traj_len
+    else:
         # In correlated mode, we need to load existing trajectories, and find their maximum length
         test_padding_len, train_padding_len = get_pairs_max_traj_len(
             attack_path, state_dim, action_dim, device, args)
-    else:
-        # In decorrelated mode, we use the given max_traj_len as the maximum trajectory length
-        test_padding_len = train_padding_len = args.max_traj_len
-
     # Pairing train and test trajectories
     # Feeding max length trajectory to be uesd for padding purposes
     # Positive pairs
