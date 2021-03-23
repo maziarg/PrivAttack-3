@@ -99,9 +99,9 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
 # Trains BCQ offline
 def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
+    buffer_name = f"{args.buffer_name}_{args.env}_{args.seed}"
     # For saving files
-    setting = f"{args.env}_{args.seed}"
-    buffer_name = f"{args.buffer_name}_{setting}"
+    setting = f"{args.env}_{args.seed}_{args.bcq_max_timesteps}"
 
     # Initialize policy
     policy = BCQ.BCQ(state_dim, action_dim, max_action, device, args.discount, args.tau, args.lmbda, args.phi)
@@ -154,7 +154,7 @@ def eval_policy(policy, env_name, seed, eval_episodes=10, max_episode_step=None)
 # Handles policy interactions with the environment, i.e. generate test buffer
 def policy_interact_with_environment(attack_path, env, state_dim, action_dim, max_action, device, args):
     # For saving files
-    setting = f"{args.env}_{args.seed}"
+    setting = f"{args.env}_{args.seed}_{args.bcq_max_timesteps}"
     buffer_name = f"target_{args.buffer_name}_{setting}"
 
     # Initialize and load policy
@@ -252,6 +252,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models") #TODO: probably must be removed
     parser.add_argument('--trajectory_length' , nargs='*', default= 1000, type = int) #Must be equal to the max_ep_length in trainer.py #TODO: The comment must be removed. We probably do not need the argument
     parser.add_argument('--max_traj_len', default=1000, type=int)
+    parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
 
     args = parser.parse_args()
 

@@ -119,7 +119,7 @@ def create_pairs(
         buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
 
     # BCQ output
-    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}"
+    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}_{args.bcq_max_timesteps}"
     test_num_trajectories, test_start_states, test_trajectories_end_index = get_buffer_properties(
         buffer_name_test , attack_path, state_dim, action_dim, device, args, test_seed)
 
