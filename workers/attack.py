@@ -578,7 +578,7 @@ def get_pairs_max_traj_len(attack_path, state_dim, action_dim, device, args):
 
 def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     
-    if args.correlation == DECORRELATED:
+    if CORRELATION_MAP.get(args.correlation) == DECORRELATED:
         # In decorrelated mode, we use the given max_traj_len as the maximum trajectory length
         test_padding_len = train_padding_len = args.max_traj_len
     else:
