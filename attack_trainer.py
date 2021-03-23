@@ -54,7 +54,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
     parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  #Must be equal to the max_ep_length in trainer.py
     parser.add_argument('--max_traj_len', default=1000, type=int)
-    parser.add_argument('--decorrelated', action="store_true", help="Activate decorrelated mode.")  # without it, correlated mode is going to run
+    parser.add_argument('--correlation', default='c', choices=["c", 'd', 's'], help="Activate semi/de/correlated mode.")
     parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
 
     args = parser.parse_args()

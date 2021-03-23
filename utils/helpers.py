@@ -134,7 +134,7 @@ def print_experiment(env, num_models, threshold, trajectory_length,
     print("number of models: ", num_models)
     print("threshold: ", threshold)
     print("trajectory length: ", trajectory_length)
-    print("attack training set size: ", attack_size)
+    print("number of predictions: ", attack_size)
     print("---------------------------")
 
 
