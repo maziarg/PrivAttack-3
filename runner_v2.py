@@ -115,8 +115,8 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
     done = True
     training_iters = 0
 
-    while training_iters < args.max_timesteps:
-        pol_vals = policy.train(replay_buffer, iterations=int(args.eval_freq), batch_size=args.batch_size)
+    while training_iters < args.bcq_max_timesteps:
+        policy.train(replay_buffer, iterations=int(args.eval_freq), batch_size=args.batch_size)
 
         evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
         np.save(f"./{attack_path}/results/BCQ_{setting}", evaluations)
@@ -162,7 +162,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
     policy.load(f"./{attack_path}/models/target_{setting}")
 
     # Initialize buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
+    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.bcq_max_timesteps)
     evaluations = []
 
     state, done = env.reset(), False
@@ -172,7 +172,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
     episode_num = 0
 
     # Interact with the environment for max_timesteps
-    for t in range(int(args.max_timesteps)):
+    for t in range(int(args.bcq_max_timesteps)):
         episode_timesteps += 1
         # Select action using the target policy
         action = (
