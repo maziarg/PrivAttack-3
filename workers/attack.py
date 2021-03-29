@@ -235,8 +235,8 @@ def generate_correlated_pairs(
             # vertically stack the trajectories to be fed into xgboost or anothe classifier
             final_train_dataset = complete_traj_seq if not isinstance(
                 final_train_dataset, np.ndarray) else np.vstack((final_train_dataset, complete_traj_seq))
-
-    print(f"generating correlated pairs...DONE!")
+    print(f"generating {CORRELATION_MAP.get(correlation)} pairs... Done!")
+    # print(f"generating correlated pairs...DONE!")
     # we return a tuple of trajectories and lables. XGBoost needs a matrix of data and label
     return (final_train_dataset, final_train_dataset_label)
 
@@ -566,7 +566,7 @@ def get_pairs_max_traj_len(attack_path, state_dim, action_dim, device, args):
         train_traj_lens.append(compute_max_trajectory_length(train_trajectories_end_index))
 
         # BCQ output
-        buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}"
+        buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}_{args.bcq_max_timesteps}"
         _, _, test_trajectories_end_index = get_buffer_properties(
             buffer_name_test , attack_path, state_dim, action_dim, device, args, test_seed)
         
@@ -676,5 +676,5 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     # Adjusting num_predictions accordingly
     num_rows, num_columns = attack_test_data_x.shape
     num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
-    print_experiment(args.env, args.seed, args.attack_thresholds, num_predictions, args.attack_sizes)
+    print_experiment(args.env, args.seed, args.attack_thresholds, num_predictions, args.max_traj_len)
     return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)

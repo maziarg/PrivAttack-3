@@ -128,13 +128,13 @@ def get_models(x_i, y_i, num_trajectories_per_model):
     return x_model, y_model, same_set, index_x, index_y
 
 
-def print_experiment(env, num_models, threshold, trajectory_length,
-                     attack_size):
-    print("running env: ", env)
-    print("number of models: ", num_models)
-    print("threshold: ", threshold)
-    print("trajectory length: ", trajectory_length)
-    print("number of predictions: ", attack_size)
+def print_experiment(env, num_models, threshold, num_predictions,
+                     max_traj_len):
+    print("Running Environment: ", env)
+    print("Seeds: ", num_models)
+    print("Threshold: ", threshold)
+    print("Number of predictions: ", num_predictions)
+    print("Maximum Trajectory Length: ", max_traj_len)
     print("---------------------------")
 
 
