@@ -27,17 +27,17 @@ def run_experiments_v2(attack_path, state_dim, action_dim, device, args):
     product_res = product(*experiment)
     results = []
     for (attack_size, attack_threshold) in product_res:
-        baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives = \
+        accuracy_bl, precision_bl, recall_bl, rmse, accuracy, precision, recall = \
             train_attack_model_v3(attack_path, state_dim, action_dim, device, args)
 
         results.append(
-            [args.max_timesteps, args.env, attack_size, attack_threshold, baseline, false_negatives_b1,
-             false_positives_bl, rmse, accuracy,
-             false_negatives, false_positives])
+            [args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
+             recall_bl, rmse, accuracy,
+             precision, recall])
 
-        logger_inplace(args.max_timesteps, args.env, attack_size, attack_threshold, baseline, false_negatives_b1,
-             false_positives_bl, rmse, accuracy,
-             false_negatives, false_positives)
+        logger_inplace(args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
+             recall_bl, rmse, accuracy,
+             precision, recall)
 
     logger_overwrite(np.asarray(results), args.env, args.max_timesteps)
 
