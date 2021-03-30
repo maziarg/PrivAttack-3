@@ -269,10 +269,8 @@ def generate_decorrelated_pairs(
     final_train_dataset = None
     final_train_dataset_label = None
     # The construction of a trajectory and its maximum length is as follows:
-    # args.max_traj_len = 1 (start train state) + 1 (start test state) + train_seq + test_seq
-    # So, the size of train_seq and tes_seq is (args.max_traj_len - 2) // 2
-    # Note: If args.max_traj_len is an odd value, the resultant max_traj_len is arg.max_traj_len - 1
-    traj_len = (max_traj_len - 2) // 2
+    # args.max_traj_len = train_seq + test_seq
+    traj_len = max_traj_len // 2
     print(f"generating decorrelated pairs...")
     for j in range(test_size):
         # Test seq
@@ -576,6 +574,16 @@ def get_pairs_max_traj_len(attack_path, state_dim, action_dim, device, args):
     return max(test_traj_lens), max(train_traj_lens)
 
 
+def shuffle_xgboost_params(attack_train_data_x, attack_train_data_y):
+    """
+    Merges X and Y data horizentally, then shuffles the results,
+    and finally splits the lable column
+    """
+    merged_data = np.hstack((attack_train_data_x, attack_train_data_y))
+    np.random.shuffle(merged_data)
+    return np.hsplit(merged_data, np.array([-1]))
+
+
 def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     
     if CORRELATION_MAP.get(args.correlation) == DECORRELATED:
@@ -612,6 +620,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     attack_train_neg_data, attack_train_neg_label = attack_train_negative_data
     attack_train_data_x = np.vstack((attack_train_pos_data, attack_train_neg_data))
     attack_train_data_y = np.vstack((attack_train_pos_label, attack_train_neg_label))
+    attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
     classifier_train_data = xgb.DMatrix(attack_train_data_x, attack_train_data_y)
 
     print("preparing eval data for classifier training ...")
@@ -620,6 +629,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     attack_eval_neg_data, attack_eval_neg_label = attack_eval_negative_data
     attack_eval_data_x = np.vstack((attack_eval_pos_data, attack_eval_neg_data))
     attack_eval_data_y = np.vstack((attack_eval_pos_label, attack_eval_neg_label))
+    attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
     classifier_eval_data = xgb.DMatrix(attack_eval_data_x, attack_eval_data_y)
 
     # This part is in parallel with the above few lines WRT getting the data to be fed into XGBoost DMatrix
@@ -668,6 +678,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     final_train_dataset_neg, final_train_dataset_neg_label = attack_train_negative_data
     attack_test_data_x = np.vstack((final_train_dataset_pos, final_train_dataset_neg))
     attack_test_data_y = np.vstack((final_train_dataset_pos_label, final_train_dataset_neg_label))
+    attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
     classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
     # prediction phase using the trained attack classifier
     classifier_predictions = attack_classifier.predict(classifier_test_data)
