@@ -6,6 +6,8 @@ from random import randint, SystemRandom
 import BCQutils
 import BCQ
 import pathlib
+import logging
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import xgboost as xgb
@@ -98,7 +100,7 @@ def get_seeds_test_pairs(label, seeds):
 
 def get_buffer_properties(buffer_name, attack_path, state_dim, action_dim, device, args, seed):
     """Loads buffers and returns some buffer properties"""
-    print("Retreiving buffer properties...")
+    logger.info("Retreiving buffer properties...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
     replay_buffer_train.load(f"./{attack_path}/{seed}/{args.max_traj_len}/buffers/{buffer_name}")
 
@@ -194,9 +196,9 @@ def generate_correlated_pairs(
     final_train_dataset = None
     final_train_dataset_label = None
     if do_train:
-        print(f"generating {CORRELATION_MAP.get(correlation)} pairs...")
+        logger.info(f"generating {CORRELATION_MAP.get(correlation)} pairs...")
     else:
-        print(f"generating correlated pairs for prediction...")
+        logger.info(f"generating correlated pairs for prediction...")
     # Pairing the entire training with test in the broadcast fashion
     for j in test_traj_indecies:
         # Pairing the entire train set with the j-th test trajectory
@@ -243,9 +245,9 @@ def generate_correlated_pairs(
             final_train_dataset = complete_traj_seq if not isinstance(
                 final_train_dataset, np.ndarray) else np.vstack((final_train_dataset, complete_traj_seq))
     if do_train:
-        print(f"generating {CORRELATION_MAP.get(correlation)} pairs... Done!")
+        logger.info(f"generating {CORRELATION_MAP.get(correlation)} pairs... Done!")
     else:
-        print("generating correlated pairs for prediction... Done!")
+        logger.info("generating correlated pairs for prediction... Done!")
     # print(f"generating correlated pairs...DONE!")
     # we return a tuple of trajectories and lables. XGBoost needs a matrix of data and label
     return (final_train_dataset, final_train_dataset_label)
@@ -279,7 +281,7 @@ def generate_decorrelated_pairs(
     """
     final_train_dataset = None
     final_train_dataset_label = None
-    print("generating decorrelated pairs...")
+    logger.info("generating decorrelated pairs...")
     train_traj_len = max_traj_len
     for j in test_traj_indecies:
         # Pairing the entire train set with the j-th test trajectory
@@ -320,7 +322,7 @@ def generate_decorrelated_pairs(
             final_train_dataset = complete_traj_seq if not isinstance(
                 final_train_dataset, np.ndarray) else np.vstack((final_train_dataset, complete_traj_seq))
 
-    print("generating decorrelated pairs...DONE!")
+    logger.info("generating decorrelated pairs...DONE!")
     # we return a tuple of trajectories and lables. XGBoost needs a matrix of data and label
     return (final_train_dataset, final_train_dataset_label)
 
@@ -373,7 +375,7 @@ def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_p
 
     del test_pairs, data_test
     gc.collect()
-    print("saved test pairs")
+    logger.info("saved test pairs")
 
     # save train pairs
     indx = 0
@@ -402,7 +404,7 @@ def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_p
 
     del data_train, labels_train
     gc.collect()
-    print("saved train pairs")
+    logger.info("saved train pairs")
 
     # save eval pairs
     insrt = 0
@@ -429,20 +431,20 @@ def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_p
 
     del data_eval, labels_eval
     gc.collect()
-    print("saved eval pairs")
+    logger.info("saved eval pairs")
 
     return d_t, l_t, d_e, l_e, d_test, labels_test
 
 
-def logger(baseline, precision_bl, recall_bl, rmse, accuracy, precision, recall):
-    print("Baseline Accuracy: ", baseline)
-    print("Precision BL: ", precision_bl)
-    print("Recall BL: ", recall_bl)
-    print("Attack Classifier Accuracy: ", accuracy)
-    print("Precision: ", precision)
-    print("Recall: ", recall)
-    print("Root MSE: ", rmse)
-    print("****************************")
+def logger_exp(baseline, precision_bl, recall_bl, rmse, accuracy, precision, recall):
+    logger.info(f"Accuracy BL: {baseline}")
+    logger.info(f"Precision BL: {precision_bl}")
+    logger.info(f"Recall BL: {recall_bl}")
+    logger.info(f"Attack Classifier Accuracy: {accuracy}")
+    logger.info(f"Attack Classifier Precision: {precision}")
+    logger.info(f"Attack Classifier Recall: {recall}")
+    logger.info(f"Attack Classifier Error (gmean): {rmse}")
+    logger.info("****************************")
 
 
 def rsme(errors):
@@ -499,7 +501,7 @@ def accuracy_report(classifier_predictions, labels_test, threshold, num_predicti
         # false positive (classifier is saying in but labels say out)
         elif classifier_predictions[i] >= threshold and labels_test[i] == 0:
             false_positives += 1
-    print(
+    logger.info(
         f"true_positive={true_positives}, true_negative={true_negatives}, false_positive={false_positives}"
         f", false_negative={false_negatives}")
     return output_prec_recall(true_positives, true_negatives, false_negatives, false_positives, num_predictions)
@@ -528,12 +530,11 @@ def generate_metrics(classifier_predictions, labels_test, threshold, num_predict
     accuracy_bl, precision_bl, recall_bl = baseline_accuracy(labels_test, num_predictions)
     RMSE_e_i = rsme(calc_errors(classifier_predictions, labels_test, threshold, num_predictions))
 
-    logger(accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall)
+    logger_exp(accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall)
     return accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall
 
 
-def train_classifier(xgb_train, xgb_eval, max_depth=20):
-    num_round = 150
+def train_classifier(xgb_train, xgb_eval, max_depth=20, num_round = 150):
     param = {'eta': '0.2',
              'n_estimators': '5000',
              'max_depth': max_depth,
@@ -542,9 +543,49 @@ def train_classifier(xgb_train, xgb_eval, max_depth=20):
 
     watch_list = [(xgb_eval, 'eval'), (xgb_train, 'train')]
     evals_result = {}
-    print("training classifier")
-    return xgb.train(param, xgb_train, num_round, watch_list, evals_result=evals_result)
+    logger.info("training classifier")
+    callbacks = [log_eval(20, True)]
+    return xgb.train(param, xgb_train, num_round, watch_list, early_stopping_rounds=10, evals_result=evals_result, callbacks=callbacks)
+    # return xgb.callback.EarlyStopping(param, xgb_train, num_round, watch_list, early_stopping_rounds=10, evals_result=evals_result)
 
+def log_eval(period=1, show_stdv=True):
+    """Create a callback that logs evaluation result with logger.
+
+    Parameters
+    ----------
+    period : int
+        The period to log the evaluation results
+
+    show_stdv : bool, optional
+         Whether show stdv if provided
+
+    Returns
+    -------
+    callback : function
+        A callback that logs evaluation every period iterations into logger.
+    """
+
+    def _fmt_metric(value, show_stdv=True):
+        """format metric string"""
+        if len(value) == 2:
+            return '%s:%g' % (value[0], value[1])
+        elif len(value) == 3:
+            if show_stdv:
+                return '%s:%g+%g' % (value[0], value[1], value[2])
+            else:
+                return '%s:%g' % (value[0], value[1])
+        else:
+            raise ValueError("wrong metric value")
+
+    def callback(env):
+        if env.rank != 0 or len(env.evaluation_result_list) == 0 or period is False:
+            return
+        i = env.iteration
+        if i % period == 0 or i + 1 == env.begin_iteration or i + 1 == env.end_iteration:
+            msg = '\t'.join([_fmt_metric(x, show_stdv) for x in env.evaluation_result_list])
+            logger.info('[%d]\t%s\n' % (i, msg))
+
+    return callback
 
 def train_attack_model_v2(environment, threshold, trajectory_length, seeds, attack_model_size, test_size, timesteps,
                           dimension):
@@ -556,7 +597,7 @@ def train_attack_model_v2(environment, threshold, trajectory_length, seeds, atta
     attack_classifier = train_classifier(xgb.DMatrix(np.load(path + d_t + '.npy'), label=np.load(path + l_t + '.npy')),
                                          xgb.DMatrix(np.load(path + d_e + '.npy'), label=np.load(path + l_e + '.npy')))
 
-    print("training finished --> generating predictions")
+    logger.info("training finished --> generating predictions")
     xgb_testing = xgb.DMatrix(np.load(path + d_test + '.npy'))
     classifier_predictions = attack_classifier.predict(xgb_testing)
 
@@ -567,12 +608,12 @@ def train_attack_model_v2(environment, threshold, trajectory_length, seeds, atta
 
     return generate_metrics(classifier_predictions, labels_test, threshold, test_size)
 
-def get_pairs_max_traj_len(attack_path, state_dim, action_dim, device, args):
+def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim, device, args):
     """
     Let's get the maximum length for both positive/negative test/train trajectories.
     This is done for padding purposes.
     """
-    print("getting maximum trajectories length...")
+    logger.info("getting maximum trajectories length...")
     train_traj_lens = []
     test_traj_lens = []
     train_test_seeds = []
@@ -614,18 +655,18 @@ def shuffle_xgboost_params(attack_train_data_x, attack_train_data_y):
     return np.hsplit(merged_data, np.array([-1]))
 
 
-def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
+def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim, device, args):
     
     if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
         # In correlated mode, we need to load existing trajectories, and find their maximum length
         # test_padding_len = train_padding_len = args.max_traj_len
         test_padding_len, train_padding_len = get_pairs_max_traj_len(
-            attack_path, state_dim, action_dim, device, args)
+            attack_path, file_path_results, state_dim, action_dim, device, args)
     else:
         # In decorrelated mode, we use the given max_traj_len as the maximum trajectory length of the train trajectory
         train_padding_len = args.max_traj_len
         test_padding_len, _ = get_pairs_max_traj_len(
-            attack_path, state_dim, action_dim, device, args)
+            attack_path, file_path_results, state_dim, action_dim, device, args)
         # test_padding_len, train_padding_len = get_pairs_max_traj_len(
         #     attack_path, state_dim, action_dim, device, args)
     # Pairing train and test trajectories
@@ -649,7 +690,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
         train_padding_len=train_padding_len
     )
 
-    print("preparing train data for classifier training ...")
+    logger.info("preparing train data for classifier training ...")
     # Instanciating xgboost DMatrix with positive/negative train data
     attack_train_pos_data, attack_train_pos_label = attack_train_positive_data
     attack_train_neg_data, attack_train_neg_label = attack_train_negative_data
@@ -659,7 +700,7 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
     classifier_train_data = xgb.DMatrix(attack_train_data_x, attack_train_data_y)
 
-    print("preparing eval data for classifier training ...")
+    logger.info("preparing eval data for classifier training ...")
     # Instanciating xgboost DMatrix with positive/negative train data
     attack_eval_pos_data, attack_eval_pos_label = attack_eval_positive_data
     attack_eval_neg_data, attack_eval_neg_label = attack_eval_negative_data
@@ -689,9 +730,10 @@ def train_attack_model_v3(attack_path, state_dim, action_dim, device, args):
     #         e_input = np.vstack((e_input, np.load(f)))
     # classifier_eval_data = xgb.DMatrix(e_input) # Note that in this way, the label needs to be extracted from the arrays
 
-    print("classifier training ...")
-    attack_classifier = train_classifier(classifier_train_data, classifier_eval_data, max_depth=args.max_depth)
-    print("training finished --> generating predictions")
+    logger.info("classifier training ...")
+    attack_classifier = train_classifier(classifier_train_data, classifier_eval_data, max_depth=args.max_depth,
+                                         num_round = args.xgb_n_rounds)
+    logger.info("training finished --> generating predictions")
     # Positive pairs
     train_seed, test_seed = get_seeds_test_pairs(1, args.seed)
     attack_train_positive_data, _ = create_pairs(

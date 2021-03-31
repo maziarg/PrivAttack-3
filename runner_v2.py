@@ -282,8 +282,10 @@ if __name__ == "__main__":
     if not os.path.exists(f"./{attack_path}/buffers"):
         os.makedirs(f"./{attack_path}/buffers")
 
-    if not os.path.exists(f"./{attack_path}/attack_outputs"):
-        os.makedirs(f"./{attack_path}/attack_outputs")
+    # if not os.path.exists(f"./{attack_path}/attack_outputs"):
+    #     os.makedirs(f"./{attack_path}/attack_outputs")
+    if not os.path.exists("./attack_outputs"):
+        os.makedirs(f"./attack_outputs")
 
     env = gym.make(args.env)
 

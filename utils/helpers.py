@@ -6,6 +6,8 @@ from itertools import permutations
 from random import shuffle, sample
 
 import numpy as np
+import logging
+logger = logging.getLogger(__name__)
 
 def format_trajectory(trajectory_length, traj_plk):
     counter = 0
@@ -81,7 +83,7 @@ def pad_pairs(pairs, attack_training_size):
 
 
 def generate_pairs(total_pairs_needed, available_trajectories, num_predictions, attack_train_size):
-    print("generating pairs")
+    logger.info("generating pairs")
     test_pairs = []
     perms = math.factorial(available_trajectories) / math.factorial(available_trajectories - 2)
 
@@ -130,12 +132,12 @@ def get_models(x_i, y_i, num_trajectories_per_model):
 
 def print_experiment(env, num_models, threshold, num_predictions,
                      max_traj_len):
-    print("Running Environment: ", env)
-    print("Seeds: ", num_models)
-    print("Threshold: ", threshold)
-    print("Number of predictions: ", num_predictions)
-    print("Maximum Trajectory Length: ", max_traj_len)
-    print("---------------------------")
+    logger.info(f"Running Environment: {env}")
+    logger.info(f"Seeds: {num_models}")
+    logger.info(f"Threshold: {threshold}")
+    logger.info(f"Number of predictions: {num_predictions}")
+    logger.info(f"Maximum Trajectory Length: {max_traj_len}")
+    logger.info("---------------------------")
 
 
 def cleanup(files, buffers):

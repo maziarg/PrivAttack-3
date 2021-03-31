@@ -1,5 +1,9 @@
 import argparse
 import os
+import datetime
+import time
+import logging
+
 # import yaml
 
 import BCQ
@@ -8,16 +12,18 @@ import DDPG
 from workers import attack, experiment
 from utils.configs import *
 from utils.helpers import str2bool
-
+logger = logging.getLogger(__name__)
 
 import gym
 import numpy as np
 import torch
-
+from utils.configs import CORRELATED, DECORRELATED, SEMI_CORRELATED, CORRELATION_MAP
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('-o', '--attack_final_results', default=os.path.expanduser('~') + '/attack_output',
+                        help='output path for files produced by the attack agent')
     parser.add_argument("--env" , help="the environment you are in", default="Hopper-v3")  # OpenAI gym environment name
     parser.add_argument("--seed", nargs=4, type=int)                          # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
@@ -56,6 +62,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_traj_len', default=1000, type=int)
     parser.add_argument('--correlation', default='c', choices=["c", 'd', 's'], help="Activate semi/de/correlated mode.")
     parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
+    parser.add_argument('--xgb_n_rounds', default=150, type=int, help="xgboost number of decision trees")
     parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
 
     args = parser.parse_args()
@@ -77,6 +84,26 @@ if __name__ == "__main__":
 
     attack_path = f"{args.env}/{args.max_timesteps}"
 
+    # *********************************** Logging Config ********************************************
+    file_path_results = args.attack_final_results + f"/{args.env}/MaxT_{args.max_timesteps}/" \
+                                                    f"bcqMaxT_{args.bcq_max_timesteps}/MaxTraj_{args.max_traj_len}/" \
+                                                    f"{CORRELATION_MAP.get(args.correlation)}"
+    if not os.path.exists(file_path_results):
+        os.makedirs(file_path_results)
+    logging.basicConfig(level=logging.DEBUG, filename=file_path_results + "/" +
+                                                      str(datetime.datetime.now()).replace(" ", "_") + "_log.txt")
+    logging.getLogger().addHandler(logging.StreamHandler())
+
+    header = "===================== Experiment configuration ========================"
+    logger.info(header)
+    args_keys = list(vars(args).keys())
+    args_keys.sort()
+    max_k = len(max(args_keys, key=lambda x: len(x)))
+    for k in args_keys:
+        s = k + '.' * (max_k - len(k)) + ': %s' % repr(getattr(args, k))
+        logger.info(s + ' ' * max((len(header) - len(s), 0)))
+    logger.info("=" * len(header))
+
     env = gym.make(args.env)
 
     # Note the used of single seed here.
@@ -96,7 +123,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    experiment.run_experiments_v2(attack_path, state_dim, action_dim, device, args)
+    experiment.run_experiments_v2(attack_path, file_path_results, state_dim, action_dim, device, args)
 
 
     #training_iters = 0

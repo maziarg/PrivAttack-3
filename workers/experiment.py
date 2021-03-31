@@ -22,13 +22,13 @@ def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_p
     return baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives
 
 
-def run_experiments_v2(attack_path, state_dim, action_dim, device, args):
+def run_experiments_v2(attack_path, file_path_results, state_dim, action_dim, device, args):
     experiment = [args.attack_sizes, args.attack_thresholds]
     product_res = product(*experiment)
     results = []
     for (attack_size, attack_threshold) in product_res:
         accuracy_bl, precision_bl, recall_bl, rmse, accuracy, precision, recall = \
-            train_attack_model_v3(attack_path, state_dim, action_dim, device, args)
+            train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim, device, args)
 
         results.append(
             [args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
