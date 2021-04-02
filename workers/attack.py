@@ -132,13 +132,23 @@ def create_pairs(
     if args.in_traj_size < train_num_trajectories:
         train_num_trajectories = args.in_traj_size
 
-    # Choosing 80% of input trajectories for training and the rest of evaluation
-    train_size = math.floor(train_num_trajectories * 0.80)
-    eval_train_size = train_num_trajectories - train_size
 
-    # Choosing 80% of output trajectories for training and the rest of evaluation
-    test_size = math.floor(test_num_trajectories * 0.80)
-    eval_test_size = test_num_trajectories - test_size
+    if do_train:
+        # Choosing 80% of input trajectories for training and the rest for evaluation
+        train_size = math.floor(train_num_trajectories * 0.80)
+        eval_train_size = train_num_trajectories - train_size
+
+        # Choosing 80% of output trajectories for training and the rest for evaluation
+        test_size = math.floor(test_num_trajectories * 0.80)
+        eval_test_size = test_num_trajectories - test_size
+    else:
+        train_size = math.floor(train_num_trajectories * args.ratio_size_prediction)
+        eval_train_size = 0
+
+        test_size = math.floor(test_num_trajectories * args.ratio_size_prediction)
+        eval_test_size = 0
+
+
 
     # Loading test/train action buffers
     test_seq_buffer = np.ravel(np.load(
@@ -169,9 +179,9 @@ def generate_correlated_train_eval_pairs(
     train_traj_indecies, train_eval_indicies = get_random_seqs(
         len(train_trajectories_end_index), train_size, eval_train_size)
 
-    if not do_train:
-        test_traj_indecies = np.append(test_traj_indecies, test_eval_indicies)
-        train_traj_indecies = np.append(train_traj_indecies, train_eval_indicies)
+    # if not do_train:
+    #     test_traj_indecies = np.append(test_traj_indecies, test_eval_indicies)
+    #     train_traj_indecies = np.append(train_traj_indecies, train_eval_indicies)
 
     final_train_dataset = generate_correlated_pairs(
         test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index,
@@ -545,8 +555,8 @@ def train_classifier(xgb_train, xgb_eval, max_depth=20, num_round = 150):
     evals_result = {}
     logger.info("training classifier")
     callbacks = [log_eval(20, True)]
-    return xgb.train(param, xgb_train, num_round, watch_list, early_stopping_rounds=10, evals_result=evals_result, callbacks=callbacks)
-    # return xgb.callback.EarlyStopping(param, xgb_train, num_round, watch_list, early_stopping_rounds=10, evals_result=evals_result)
+    return xgb.train(param, xgb_train, num_round, watch_list, early_stopping_rounds=10,
+                     evals_result=evals_result, callbacks=callbacks)
 
 def log_eval(period=1, show_stdv=True):
     """Create a callback that logs evaluation result with logger.

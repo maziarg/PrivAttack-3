@@ -49,6 +49,9 @@ if __name__ == "__main__":
     parser.add_argument("--attack_sizes", nargs='*', type=int)  # Attack training size
     parser.add_argument('--out_traj_size', default=10, type=int)  # This is used to bound the number of test trajecotries
     parser.add_argument('--in_traj_size', default=10, type=int)  # This is used to bound the number of train trajectories
+    parser.add_argument('--ratio_size_prediction', default=0.25, type=float, help="determines the ratio of out- and "
+                                                                                  "in-traj-sizes for making prediction "
+                                                                                  "pairs")
 
     parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str)
     parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests")
