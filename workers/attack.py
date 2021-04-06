@@ -446,15 +446,21 @@ def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_p
     return d_t, l_t, d_e, l_e, d_test, labels_test
 
 
-def logger_exp(baseline, precision_bl, recall_bl, rmse, accuracy, precision, recall):
+def logger_exp(baseline, precision_bl, recall_bl, rmse, accuracy, precision, recall, threshold):
+    logger.info("****************************")
+    logger.info("Baseline Results:")
     logger.info(f"Accuracy BL: {baseline}")
     logger.info(f"Precision BL: {precision_bl}")
     logger.info(f"Recall BL: {recall_bl}")
-    logger.info(f"Attack Classifier Accuracy: {accuracy}")
-    logger.info(f"Attack Classifier Precision: {precision}")
-    logger.info(f"Attack Classifier Recall: {recall}")
-    logger.info(f"Attack Classifier Error (gmean): {rmse}")
     logger.info("****************************")
+    logger.info("Attack Classifier Results:")
+    for i in range(len(threshold)):
+        logger.info(f"Threshold {threshold[i]}:")
+        logger.info(f"Accuracy= {accuracy[i]}")
+        logger.info(f"Precision= {precision[i]}")
+        logger.info(f"Recall= {recall[i]}")
+        logger.info(f"Error (gmean)= {rmse[i]}")
+        logger.info(30*"-")
 
 
 def rsme(errors):
@@ -494,27 +500,56 @@ def baseline_accuracy(labels_test, num_predictions):
 
 
 def accuracy_report(classifier_predictions, labels_test, threshold, num_predictions):
-    false_positives = 0
-    false_negatives = 0
-    true_positives = 0
-    true_negatives = 0
-    for i in range(num_predictions):
-        if classifier_predictions[i] >= threshold and labels_test[i] == 1:
-            true_positives += 1
-        elif classifier_predictions[i] < threshold and labels_test[i] == 0:
-            true_negatives += 1
+    # false_positives = 0
+    # false_negatives = 0
+    # true_positives = 0
+    # true_negatives = 0
+    accuracy = np.zeros(len(threshold))
+    precision = np.zeros(len(threshold))
+    recall = np.zeros(len(threshold))
+    RMSE_e_i = np.zeros(len(threshold))
+    for j in range(len(threshold)):
+        false_positives = 0
+        false_negatives = 0
+        true_positives = 0
+        true_negatives = 0
+        for i in range(num_predictions):
+            if classifier_predictions[i] >= threshold[j] and labels_test[i] == 1:
+                true_positives += 1
+            elif classifier_predictions[i] < threshold[j] and labels_test[i] == 0:
+                true_negatives += 1
 
-        # false negative (classifier is saying out but labels say in)
-        elif classifier_predictions[i] < threshold and labels_test[i] == 1:
-            false_negatives += 1
+            # false negative (classifier is saying out but labels say in)
+            elif classifier_predictions[i] < threshold[j] and labels_test[i] == 1:
+                false_negatives += 1
 
-        # false positive (classifier is saying in but labels say out)
-        elif classifier_predictions[i] >= threshold and labels_test[i] == 0:
-            false_positives += 1
-    logger.info(
-        f"true_positive={true_positives}, true_negative={true_negatives}, false_positive={false_positives}"
-        f", false_negative={false_negatives}")
-    return output_prec_recall(true_positives, true_negatives, false_negatives, false_positives, num_predictions)
+            # false positive (classifier is saying in but labels say out)
+            elif classifier_predictions[i] >= threshold[j] and labels_test[i] == 0:
+                false_positives += 1
+        logger.info(
+            f"Threshold = {threshold[j]}: true_positive = {true_positives}, true_negative = {true_negatives}, "
+            f"false_positive = {false_positives}, false_negative={false_negatives}")
+        accuracy[j], precision[j], recall[j] = output_prec_recall(true_positives, true_negatives, false_negatives,
+                                                                  false_positives, num_predictions)
+        RMSE_e_i[j] = rsme(calc_errors(classifier_predictions, labels_test, threshold[j], num_predictions))
+    # for i in range(num_predictions):
+    #     if classifier_predictions[i] >= threshold and labels_test[i] == 1:
+    #         true_positives += 1
+    #     elif classifier_predictions[i] < threshold and labels_test[i] == 0:
+    #         true_negatives += 1
+    #
+    #     # false negative (classifier is saying out but labels say in)
+    #     elif classifier_predictions[i] < threshold and labels_test[i] == 1:
+    #         false_negatives += 1
+    #
+    #     # false positive (classifier is saying in but labels say out)
+    #     elif classifier_predictions[i] >= threshold and labels_test[i] == 0:
+    #         false_positives += 1
+    # logger.info(
+    #     f"true_positive={true_positives}, true_negative={true_negatives}, false_positive={false_positives}"
+    #     f", false_negative={false_negatives}")
+    # return output_prec_recall(true_positives, true_negatives, false_negatives, false_positives, num_predictions)
+    return accuracy, precision, recall, RMSE_e_i
 
 
 def output_prec_recall(tp, tn, fn, fp, total):
@@ -534,13 +569,13 @@ def output_prec_recall(tp, tn, fn, fp, total):
 
 
 def generate_metrics(classifier_predictions, labels_test, threshold, num_predictions):
-    accuracy, precision, recall = accuracy_report(
+    accuracy, precision, recall, RMSE_e_i = accuracy_report(
         classifier_predictions, labels_test, threshold, num_predictions)
     
     accuracy_bl, precision_bl, recall_bl = baseline_accuracy(labels_test, num_predictions)
-    RMSE_e_i = rsme(calc_errors(classifier_predictions, labels_test, threshold, num_predictions))
+    # RMSE_e_i = rsme(calc_errors(classifier_predictions, labels_test, threshold, num_predictions))
 
-    logger_exp(accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall)
+    logger_exp(accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall, threshold)
     return accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall
 
 
@@ -778,4 +813,5 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
     num_rows, num_columns = attack_test_data_x.shape
     num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
     print_experiment(args.env, args.seed, args.attack_thresholds, num_predictions, args.max_traj_len)
-    return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)
+    # return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)
+    return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds, num_predictions)

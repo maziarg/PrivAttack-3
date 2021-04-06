@@ -24,8 +24,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--attack_final_results', default=os.path.expanduser('~') + '/attack_output',
                         help='output path for files produced by the attack agent')
-    parser.add_argument("--env" , help="the environment you are in", default="Hopper-v3")  # OpenAI gym environment name
+    parser.add_argument("--env", help="the environment you are in", default="Hopper-v3")  # OpenAI gym environment name
     parser.add_argument("--seed", nargs=4, type=int)                          # Sets Gym, PyTorch and Numpy seeds
+    parser.add_argument('--num_models', default=1, help="number of shadow models", type=int)
+    # parser.add_argument("--shadow_seeds", nargs='+', type=int, help="At least two integers")
+    # parser.add_argument("--target_seeds", nargs=2, type=int)  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
 
     parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
@@ -45,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_behavioral", action="store_true")  # If true, train behavioral (DDPG)
     parser.add_argument("--train_policy", action="store_true")  # If true, train policy (BCQ)
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
-    parser.add_argument("--attack_thresholds", nargs='*', type=float)  # Threshold for attack training
+    parser.add_argument("--attack_thresholds", nargs='+', type=float)  # Threshold for attack training
     parser.add_argument("--attack_sizes", nargs='*', type=int)  # Attack training size
     parser.add_argument('--out_traj_size', default=10, type=int)  # This is used to bound the number of test trajecotries
     parser.add_argument('--in_traj_size', default=10, type=int)  # This is used to bound the number of train trajectories
@@ -56,11 +59,10 @@ if __name__ == "__main__":
     parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str)
     parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests")
     parser.add_argument('--fix_num_models', default='no')
-    parser.add_argument('--num_models', default=3, help="number of models to use", type=int)
     parser.add_argument('--attack_model_size', default=1000, type=int,
                         help="size of the training set for the attack model")
     parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
-    parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
+    # parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
     parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  #Must be equal to the max_ep_length in trainer.py
     parser.add_argument('--max_traj_len', default=1000, type=int)
     parser.add_argument('--correlation', default='c', choices=["c", 'd', 's'], help="Activate semi/de/correlated mode.")
@@ -108,7 +110,6 @@ if __name__ == "__main__":
     logger.info("=" * len(header))
 
     env = gym.make(args.env)
-
     # Note the used of single seed here.
     # Though the usage of a single seed does not affect state_dim, action_dim, max_action.
     # TODO: would this usage model affect other parts of the code?
