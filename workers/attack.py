@@ -163,13 +163,15 @@ def create_pairs(
         train_num_trajectories = args.in_traj_size
 
     if do_train:
+        train_num_trajectories = train_num_trajectories / np.sqrt(args.num_models)
+        test_num_trajectories = test_num_trajectories / np.sqrt(args.num_models)
         # Choosing 80% of input trajectories for training and the rest for evaluation
-        train_size = math.floor(train_num_trajectories * 0.80)
-        eval_train_size = train_num_trajectories - train_size
+        train_size = round(train_num_trajectories * 0.80)
+        eval_train_size = round(train_num_trajectories - train_size)
 
         # Choosing 80% of output trajectories for training and the rest for evaluation
-        test_size = math.floor(test_num_trajectories * 0.80)
-        eval_test_size = test_num_trajectories - test_size
+        test_size = round(test_num_trajectories * 0.80)
+        eval_test_size = round(test_num_trajectories - test_size)
     else:
 
         train_size = math.floor(train_num_trajectories * args.ratio_size_prediction)
