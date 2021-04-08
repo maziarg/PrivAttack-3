@@ -25,10 +25,12 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--attack_final_results', default=os.path.expanduser('~') + '/attack_output',
                         help='output path for files produced by the attack agent')
     parser.add_argument("--env", help="the environment you are in", default="Hopper-v3")  # OpenAI gym environment name
-    parser.add_argument("--seed", nargs=4, type=int)                          # Sets Gym, PyTorch and Numpy seeds
+    # parser.add_argument("--seed", nargs=4, type=int)                          # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument('--num_models', default=1, help="number of shadow models", type=int)
-    # parser.add_argument("--shadow_seeds", nargs='+', type=int, help="At least two integers")
-    # parser.add_argument("--target_seeds", nargs=2, type=int)  # Sets Gym, PyTorch and Numpy seeds
+    parser.add_argument("--shadow_seeds", nargs='+', type=int, help="two integers (for num_models 1 and 2). "
+                                                                    "for num_models > 2: "
+                                                                    "the number of shadow_seeds = num_models") # Sets Gym, PyTorch and Numpy seeds
+    parser.add_argument("--target_seeds", nargs=2, type=int)
     parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
 
     parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
@@ -85,7 +87,8 @@ if __name__ == "__main__":
     #         raise
 
     print("---------------------------------------")
-    print(f"Setting: Training Attack, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
+    print(f"Setting: Training Attack, Env: {args.env}, Shadow Seeds: {args.shadow_seeds}, "
+          f"Target Seeds: {args.target_seeds}Max Trajectory Length: {args.max_traj_len}")
 
     attack_path = f"{args.env}/{args.max_timesteps}"
 
@@ -113,12 +116,12 @@ if __name__ == "__main__":
     # Note the used of single seed here.
     # Though the usage of a single seed does not affect state_dim, action_dim, max_action.
     # TODO: would this usage model affect other parts of the code?
-    env.seed(args.seed[0])
+    env.seed(args.shadow_seeds[0])
     # Bounding the maximum allowed trajectory length in the environment.
     # This is modified here for consistency with runner_v2. It seems that it is not affecting attack_trainer!
     env._max_episode_steps = args.max_traj_len
-    torch.manual_seed(args.seed[0])
-    np.random.seed(args.seed[0])
+    torch.manual_seed(args.shadow_seeds[0])
+    np.random.seed(args.shadow_seeds[0])
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]

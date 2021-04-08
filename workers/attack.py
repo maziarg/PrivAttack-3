@@ -7,6 +7,7 @@ import BCQutils
 import BCQ
 import pathlib
 import logging
+import copy
 logger = logging.getLogger(__name__)
 
 import numpy as np
@@ -69,22 +70,51 @@ def pad_traj(traj, padd_len):
     return test_seq
 
 
-def get_seeds_train_pairs(label, seeds):
+def get_seeds_pairs(label, seeds, index=0, test=False):
     """
     To create trajectory pairs
     For label 1, need to pair train and test from seed 0
     For label 0, need to pair test from seed 0 and train from seed 1
     Note: evidence == test == seed 0
     """
-    if label:
-        train_seed = int(seeds[0])
-        test_seed = int(seeds[0])
+    if test:
+        if label:
+            train_seed = int(seeds[0])
+            test_seed = int(seeds[0])
+            # train_seed = int(seeds[0])
+            # test_seed = int(seeds[0])
+        else:
+            train_seed = int(seeds[1])
+            test_seed = int(seeds[0])
     else:
-        train_seed = int(seeds[1])
-        test_seed = int(seeds[0])
+        if label:
+            train_seed = int(seeds[index])
+            test_seed = int(seeds[index])
+        else:
+            if index != 0:
+                train_seed = int(seeds[index - 1])
+            else:
+                train_seed = int(seeds[-1])
+
+            test_seed = int(seeds[index])
 
     return train_seed, test_seed
 
+# def get_seeds_train_pairs(label, seeds):
+#     """
+#     To create trajectory pairs
+#     For label 1, need to pair train and test from seed 0
+#     For label 0, need to pair test from seed 0 and train from seed 1
+#     Note: evidence == test == seed 0
+#     """
+#     if label:
+#         train_seed = int(seeds[0])
+#         test_seed = int(seeds[0])
+#     else:
+#         train_seed = int(seeds[1])
+#         test_seed = int(seeds[0])
+#
+#     return train_seed, test_seed
 
 def get_seeds_test_pairs(label, seeds):
     """Following the logic from get_seeds_train_pairs"""
@@ -132,7 +162,6 @@ def create_pairs(
     if args.in_traj_size < train_num_trajectories:
         train_num_trajectories = args.in_traj_size
 
-
     if do_train:
         # Choosing 80% of input trajectories for training and the rest for evaluation
         train_size = math.floor(train_num_trajectories * 0.80)
@@ -142,6 +171,7 @@ def create_pairs(
         test_size = math.floor(test_num_trajectories * 0.80)
         eval_test_size = test_num_trajectories - test_size
     else:
+
         train_size = math.floor(train_num_trajectories * args.ratio_size_prediction)
         eval_train_size = 0
 
@@ -653,6 +683,44 @@ def train_attack_model_v2(environment, threshold, trajectory_length, seeds, atta
 
     return generate_metrics(classifier_predictions, labels_test, threshold, test_size)
 
+
+# def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim, device, args):
+#     """
+#     Let's get the maximum length for both positive/negative test/train trajectories.
+#     This is done for padding purposes.
+#     """
+#     logger.info("getting maximum trajectories length...")
+#     train_traj_lens = []
+#     test_traj_lens = []
+#     train_test_seeds = []
+#     max_train_traj_len = []
+#     for label in [0, 1]:
+#         train_test_seeds.append(get_seeds_train_pairs(label, args.seed))
+#         train_test_seeds.append(get_seeds_test_pairs(label, args.seed))
+#
+#     for train_seed, test_seed in train_test_seeds:
+#         if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
+#             # loading buffers to get trajectories lengths
+#             buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
+#             _, _, train_trajectories_end_index = get_buffer_properties(
+#                 buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
+#
+#             # Maximum trajectory length is calculated for padding purposes
+#             train_traj_lens.append(compute_max_trajectory_length(train_trajectories_end_index))
+#             max_train_traj_len = max(train_traj_lens)
+#
+#         # BCQ output
+#         buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}_{args.bcq_max_timesteps}"
+#         _, _, test_trajectories_end_index = get_buffer_properties(
+#             buffer_name_test, attack_path, state_dim, action_dim, device, args, test_seed)
+#
+#         # Maximum trajectory length is calculated for padding purposes
+#         test_traj_lens.append(compute_max_trajectory_length(test_trajectories_end_index))
+#         max_test_traj_len = max(test_traj_lens)
+#
+#     return max_test_traj_len, max_train_traj_len
+
+
 def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim, device, args):
     """
     Let's get the maximum length for both positive/negative test/train trajectories.
@@ -664,8 +732,10 @@ def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim
     train_test_seeds = []
     max_train_traj_len = []
     for label in [0, 1]:
-        train_test_seeds.append(get_seeds_train_pairs(label, args.seed))
-        train_test_seeds.append(get_seeds_test_pairs(label, args.seed))
+        for i in range(args.num_models):
+            train_test_seeds.append(get_seeds_pairs(label, args.shadow_seeds, index=i, test=False))
+        train_test_seeds.append(get_seeds_pairs(label, args.target_seeds, test=True))
+
 
     for train_seed, test_seed in train_test_seeds:
         if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
@@ -676,7 +746,6 @@ def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim
 
             # Maximum trajectory length is calculated for padding purposes
             train_traj_lens.append(compute_max_trajectory_length(train_trajectories_end_index))
-            max_train_traj_len = max(train_traj_lens)
 
         # BCQ output
         buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}_{args.bcq_max_timesteps}"
@@ -685,9 +754,11 @@ def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim
         
         # Maximum trajectory length is calculated for padding purposes
         test_traj_lens.append(compute_max_trajectory_length(test_trajectories_end_index))
-        max_test_traj_len = max(test_traj_lens)
 
-    return max_test_traj_len, max_train_traj_len
+    if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
+        max_train_traj_len = max(train_traj_lens)
+
+    return max(test_traj_lens), max_train_traj_len
 
 
 def shuffle_xgboost_params(attack_train_data_x, attack_train_data_y):
@@ -716,29 +787,58 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
         #     attack_path, state_dim, action_dim, device, args)
     # Pairing train and test trajectories
     # Feeding max length trajectory to be uesd for padding purposes
-    # Positive pairs
-    train_seed, test_seed = get_seeds_train_pairs(1, args.seed)
-    attack_train_positive_data, attack_eval_positive_data = create_pairs(
-        attack_path, state_dim, action_dim, device, args, 1,
-        train_seed, test_seed,
-        do_train=True,
-        test_padding_len=test_padding_len,
-        train_padding_len=train_padding_len
-    )
-    # Negative pairs
-    train_seed, test_seed = get_seeds_train_pairs(0, args.seed)
-    attack_train_negative_data, attack_eval_negative_data = create_pairs(
-        attack_path, state_dim, action_dim, device, args, 0,
-        train_seed, test_seed,
-        do_train=True,
-        test_padding_len=test_padding_len,
-        train_padding_len=train_padding_len
-    )
+    attack_train_pos_data = None
+    attack_train_pos_label = None
+    attack_eval_pos_data = None
+    attack_eval_pos_label = None
+    attack_train_neg_data = None
+    attack_train_neg_label = None
+    attack_eval_neg_data = None
+    attack_eval_neg_label = None
+    for i in range(args.num_models):
+        # Positive pairs
+        train_seed, test_seed = get_seeds_pairs(1, args.shadow_seeds, index=i, test=False)
+        attack_train_positive_data, attack_eval_positive_data = create_pairs(
+            attack_path, state_dim, action_dim, device, args, 1,
+            train_seed, test_seed,
+            do_train=True,
+            test_padding_len=test_padding_len,
+            train_padding_len=train_padding_len
+        )
+        train_pos_data, train_pos_label = attack_train_positive_data
+        eval_pos_data, eval_pos_label = attack_eval_positive_data
+        attack_train_pos_data = train_pos_data if not isinstance(
+                attack_train_pos_data, np.ndarray) else np.vstack((attack_train_pos_data, train_pos_data))
+        attack_train_pos_label = train_pos_label if not isinstance(
+            attack_train_pos_label, np.ndarray) else np.vstack((attack_train_pos_label, train_pos_label))
+        attack_eval_pos_data = eval_pos_data if not isinstance(
+                attack_eval_pos_data, np.ndarray) else np.vstack((attack_eval_pos_data, eval_pos_data))
+        attack_eval_pos_label = eval_pos_label if not isinstance(
+            attack_eval_pos_label, np.ndarray) else np.vstack((attack_eval_pos_label, eval_pos_label))
+        # Negative pairs
+        train_seed, test_seed = get_seeds_pairs(0, args.shadow_seeds, index=i, test=False)
+        attack_train_negative_data, attack_eval_negative_data = create_pairs(
+            attack_path, state_dim, action_dim, device, args, 0,
+            train_seed, test_seed,
+            do_train=True,
+            test_padding_len=test_padding_len,
+            train_padding_len=train_padding_len
+        )
+        train_neg_data, train_neg_label = attack_train_negative_data
+        eval_neg_data, eval_neg_label = attack_eval_negative_data
+        attack_train_neg_data = train_neg_data if not isinstance(
+                attack_train_neg_data, np.ndarray) else np.vstack((attack_train_neg_data, train_neg_data))
+        attack_train_neg_label = train_neg_label if not isinstance(
+            attack_train_neg_label, np.ndarray) else np.vstack((attack_train_neg_label, train_neg_label))
+        attack_eval_neg_data = eval_neg_data if not isinstance(
+                attack_eval_neg_data, np.ndarray) else np.vstack((attack_eval_neg_data, eval_neg_data))
+        attack_eval_neg_label = eval_neg_label if not isinstance(
+            attack_eval_neg_label, np.ndarray) else np.vstack((attack_eval_neg_label, eval_neg_label))
 
     logger.info("preparing train data for classifier training ...")
     # Instanciating xgboost DMatrix with positive/negative train data
-    attack_train_pos_data, attack_train_pos_label = attack_train_positive_data
-    attack_train_neg_data, attack_train_neg_label = attack_train_negative_data
+    # attack_train_pos_data, attack_train_pos_label = attack_train_positive_data
+    # attack_train_neg_data, attack_train_neg_label = attack_train_negative_data
     attack_train_data_x = np.vstack((attack_train_pos_data, attack_train_neg_data))
     attack_train_data_y = np.vstack((attack_train_pos_label, attack_train_neg_label))
     attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
@@ -747,8 +847,8 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
 
     logger.info("preparing eval data for classifier training ...")
     # Instanciating xgboost DMatrix with positive/negative train data
-    attack_eval_pos_data, attack_eval_pos_label = attack_eval_positive_data
-    attack_eval_neg_data, attack_eval_neg_label = attack_eval_negative_data
+    # attack_eval_pos_data, attack_eval_pos_label = attack_eval_positive_data
+    # attack_eval_neg_data, attack_eval_neg_label = attack_eval_negative_data
     attack_eval_data_x = np.vstack((attack_eval_pos_data, attack_eval_neg_data))
     attack_eval_data_y = np.vstack((attack_eval_pos_label, attack_eval_neg_label))
     attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
@@ -780,7 +880,7 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
                                          num_round = args.xgb_n_rounds)
     logger.info("training finished --> generating predictions")
     # Positive pairs
-    train_seed, test_seed = get_seeds_test_pairs(1, args.seed)
+    train_seed, test_seed = get_seeds_pairs(1, args.target_seeds, test=True)
     attack_train_positive_data, _ = create_pairs(
         attack_path, state_dim, action_dim, device, args, 1,
         train_seed, test_seed,
@@ -789,7 +889,7 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
         train_padding_len=train_padding_len
     )
     # Negative pairs
-    train_seed, test_seed = get_seeds_test_pairs(0, args.seed)
+    train_seed, test_seed = get_seeds_pairs(0, args.target_seeds, test=True)
     attack_train_negative_data, _ = create_pairs(
         attack_path, state_dim, action_dim, device, args, 0,
         train_seed, test_seed,
@@ -812,6 +912,7 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
     # Adjusting num_predictions accordingly
     num_rows, num_columns = attack_test_data_x.shape
     num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
-    print_experiment(args.env, args.seed, args.attack_thresholds, num_predictions, args.max_traj_len)
+    print_experiment(args.env, args.shadow_seeds, args.target_seeds, args.attack_thresholds,
+                     num_predictions, args.max_traj_len, args.num_models)
     # return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)
     return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds, num_predictions)

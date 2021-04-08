@@ -33,7 +33,7 @@ def run_experiments_v2(attack_path, file_path_results, state_dim, action_dim, de
     # results.append(
     #     [args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
     #      recall_bl, rmse, accuracy, precision, recall])
-    for i in len(args.attack_thresholds):
+    for i in range(len(args.attack_thresholds)):
         results.append(
             [args.max_timesteps, args.env, args.attack_sizes[0], args.attack_thresholds[i], accuracy_bl,
              precision_bl, recall_bl, rmse[i], accuracy[i], precision[i], recall[i]])
