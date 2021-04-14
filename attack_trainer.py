@@ -69,6 +69,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_traj_len', default=1000, type=int)
     parser.add_argument('--correlation', default='c', choices=["c", 'd', 's'], help="Activate semi/de/correlated mode.")
     parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
+    parser.add_argument('--xg_eta', default=0.2, type=float, help="xgboost learning rate")
     parser.add_argument('--xgb_n_rounds', default=150, type=int, help="xgboost number of decision trees")
     parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
 

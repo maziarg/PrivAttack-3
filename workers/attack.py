@@ -611,11 +611,11 @@ def generate_metrics(classifier_predictions, labels_test, threshold, num_predict
     return accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall
 
 
-def train_classifier(xgb_train, xgb_eval, max_depth=20, num_round = 150):
-    param = {'eta': '0.2',
+def train_classifier(xgb_train, xgb_eval, max_depth=20, num_round=150, eta=0.2):
+    param = {'eta': 0.2,
              'n_estimators': '5000',
              'max_depth': max_depth,
-             'objective': 'reg:logistic',
+             'objective': 'binary:logistic',
              'eval_metric': ['logloss', 'error', 'rmse']}
 
     watch_list = [(xgb_eval, 'eval'), (xgb_train, 'train')]
@@ -879,7 +879,7 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
 
     logger.info("classifier training ...")
     attack_classifier = train_classifier(classifier_train_data, classifier_eval_data, max_depth=args.max_depth,
-                                         num_round = args.xgb_n_rounds)
+                                         num_round=args.xgb_n_rounds, eta=args.xg_eta)
     logger.info("training finished --> generating predictions")
     # Positive pairs
     train_seed, test_seed = get_seeds_pairs(1, args.target_seeds, test=True)
