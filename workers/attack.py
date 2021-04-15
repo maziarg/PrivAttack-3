@@ -612,7 +612,7 @@ def generate_metrics(classifier_predictions, labels_test, threshold, num_predict
 
 
 def train_classifier(xgb_train, xgb_eval, max_depth=20, num_round=150, eta=0.2):
-    param = {'eta': 0.2,
+    param = {'eta': eta,
              'n_estimators': '5000',
              'max_depth': max_depth,
              'objective': 'binary:logistic',
