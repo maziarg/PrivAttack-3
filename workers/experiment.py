@@ -4,7 +4,8 @@ import pandas as pd
 from random import sample
 from utils.helpers import print_experiment, format_trajectory
 from itertools import product
-from workers.attack import train_attack_model_v3
+from workers.attack import train_attack_model_v3, train_attack_model_v4
+from workers.attack import train_classifier
 
 
 def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_predictions,
@@ -22,29 +23,52 @@ def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_p
     return baseline, false_negatives_b1, false_positives_bl, rmse, accuracy, false_negatives, false_positives
 
 
-def run_experiments_v2(attack_path, file_path_results, state_dim, action_dim, device, args):
+def run_experiments_v2(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args):
     # experiment = [args.attack_sizes, args.attack_thresholds]
     # product_res = product(*experiment)
-    results = []
+    # results = []
     # for (attack_size, attack_threshold) in product_res:
-    accuracy_bl, precision_bl, recall_bl, rmse, accuracy, precision, recall = \
-        train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim, device, args)
+    # accuracy_bl, precision_bl, recall_bl, rmse, accuracy, precision, recall = \
+    train_attack_model_v3(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args)
 
     # results.append(
     #     [args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
     #      recall_bl, rmse, accuracy, precision, recall])
-    for i in range(len(args.attack_thresholds)):
-        results.append(
-            [args.max_timesteps, args.env, args.attack_sizes[0], args.attack_thresholds[i], accuracy_bl,
-             precision_bl, recall_bl, rmse[i], accuracy[i], precision[i], recall[i]])
-
-        logger_inplace(args.max_timesteps, args.env, args.attack_sizes[0], args.attack_thresholds[i], accuracy_bl,
-                       precision_bl, recall_bl, rmse[i], accuracy[i], precision[i], recall[i])
+    # for i in range(len(args.attack_thresholds)):
+    #     results.append(
+    #         [args.max_timesteps, args.env, args.attack_sizes[0], args.attack_thresholds[i], accuracy_bl,
+    #          precision_bl, recall_bl, rmse[i], accuracy[i], precision[i], recall[i]])
+    #
+    #     logger_inplace(args.max_timesteps, args.env, args.attack_sizes[0], args.attack_thresholds[i], accuracy_bl,
+    #                    precision_bl, recall_bl, rmse[i], accuracy[i], precision[i], recall[i])
 
     # logger_inplace(args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
     #                recall_bl, rmse, accuracy, precision, recall)
 
-    logger_overwrite(np.asarray(results), args.env, args.max_timesteps)
+    # logger_overwrite(np.asarray(results), args.env, args.max_timesteps)
+
+
+def run_classifier(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args):
+
+    results = []
+    # for (attack_size, attack_threshold) in product_res:
+    train_attack_model_v4(file_path_results, pair_path_results, args)
+
+    # results.append(
+    #     [args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
+    #      recall_bl, rmse, accuracy, precision, recall])
+    # for i in range(len(args.attack_thresholds)):
+    #     results.append(
+    #         [args.max_timesteps, args.env, args.attack_sizes[0], args.attack_thresholds[i], accuracy_bl,
+    #          precision_bl, recall_bl, rmse[i], accuracy[i], precision[i], recall[i]])
+    #
+    #     logger_inplace(args.max_timesteps, args.env, args.attack_sizes[0], args.attack_thresholds[i], accuracy_bl,
+    #                    precision_bl, recall_bl, rmse[i], accuracy[i], precision[i], recall[i])
+    #
+    # # logger_inplace(args.max_timesteps, args.env, attack_size, attack_threshold, accuracy_bl, precision_bl,
+    # #                recall_bl, rmse, accuracy, precision, recall)
+    #
+    # logger_overwrite(np.asarray(results), args.env, args.max_timesteps)
 
 
 def logger_inplace(timesteps, env, attack_size, threshold, baseline, false_negatives_b1,

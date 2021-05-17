@@ -132,7 +132,7 @@ def get_buffer_properties(buffer_name, attack_path, state_dim, action_dim, devic
     """Loads buffers and returns some buffer properties"""
     logger.info("Retreiving buffer properties...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"./{attack_path}/{seed}/{args.max_traj_len}/buffers/{buffer_name}")
+    replay_buffer_train.load(f"{attack_path}/{seed}/{args.max_traj_len}/buffers/{buffer_name}")
 
     num_trajectories = replay_buffer_train.num_trajectories
     start_states = replay_buffer_train.initial_state
@@ -184,9 +184,9 @@ def create_pairs(
 
     # Loading test/train action buffers
     test_seq_buffer = np.ravel(np.load(
-        f"./{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy"))
+        f"{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy"))
     train_seq_buffer = np.ravel(np.load(
-        f"./{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy"))
+        f"{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy"))
 
     if CORRELATION_MAP.get(args.correlation) == DECORRELATED and do_train:
         return generate_decorrelated_train_eval_pairs(
@@ -604,11 +604,11 @@ def generate_metrics(classifier_predictions, labels_test, threshold, num_predict
     accuracy, precision, recall, RMSE_e_i = accuracy_report(
         classifier_predictions, labels_test, threshold, num_predictions)
     
-    accuracy_bl, precision_bl, recall_bl = baseline_accuracy(labels_test, num_predictions)
+    # accuracy_bl, precision_bl, recall_bl = baseline_accuracy(labels_test, num_predictions)
     # RMSE_e_i = rsme(calc_errors(classifier_predictions, labels_test, threshold, num_predictions))
 
-    logger_exp(accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall, threshold)
-    return accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall
+    # logger_exp(accuracy_bl, precision_bl, recall_bl, RMSE_e_i, accuracy, precision, recall, threshold)
+    return true_positive, true_negative, false_positive, false_negative
 
 
 def train_classifier(xgb_train, xgb_eval, max_depth=20, num_round=150, eta=0.2):
@@ -663,6 +663,48 @@ def log_eval(period=1, show_stdv=True):
             logger.info('[%d]\t%s\n' % (i, msg))
 
     return callback
+
+
+def train_attack_model_v4(file_path_results, pair_path_results, args):
+
+    # pair_path_results = file_path_results + f"/pairs/train_ShSeed_{args.shadow_seeds}_TaSeed_{args.target_seeds}" \
+    #                                         f"_in_{args.in_traj_size}_out_{args.out_traj_size}" \
+    #                                         f"_ratio_{args.ratio_size_prediction}"
+
+    logger.info("loading the train/eval pairs ...")
+    attack_train_data_x = np.load(pair_path_results + '/train_x.npy')
+    attack_train_data_y = np.load(pair_path_results + '/train_y.npy')
+    attack_eval_data_x = np.load(pair_path_results + '/eval_x.npy')
+    attack_eval_data_y = np.load(pair_path_results + '/eval_y.npy')
+
+    classifier_train_data = xgb.DMatrix(attack_train_data_x, attack_train_data_y)
+    classifier_eval_data = xgb.DMatrix(attack_eval_data_x, attack_eval_data_y)
+
+    logger.info("classifier training ...")
+    attack_classifier = train_classifier(classifier_train_data, classifier_eval_data, max_depth=args.max_depth,
+                                         num_round=args.xgb_n_rounds, eta=args.xg_eta)
+
+    logger.info("training finished ...")
+    logger.info("loading the test pairs ...")
+
+    attack_test_data_x = np.load(pair_path_results + '/test_x.npy')
+    attack_test_data_y = np.load(pair_path_results + '/test_y.npy')
+
+    classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
+
+    logger.info("predicting ...")
+
+    # prediction phase using the trained attack classifier
+    classifier_predictions = attack_classifier.predict(classifier_test_data)
+
+    # NOTE: the number of predictions cannot be more than then number of rows in attack_test_data_x
+    # Adjusting num_predictions accordingly
+    num_rows, num_columns = attack_test_data_x.shape
+    num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
+    print_experiment(args.env, args.shadow_seeds, args.target_seeds, args.attack_thresholds,
+                     num_predictions, args.max_traj_len, args.num_models)
+    # return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)
+    return accuracy_report(classifier_predictions, attack_test_data_y, args.attack_thresholds, num_predictions)
 
 def train_attack_model_v2(environment, threshold, trajectory_length, seeds, attack_model_size, test_size, timesteps,
                           dimension):
@@ -773,8 +815,8 @@ def shuffle_xgboost_params(attack_train_data_x, attack_train_data_y):
     return np.hsplit(merged_data, np.array([-1]))
 
 
-def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim, device, args):
-    
+def train_attack_model_v3(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args):
+
     if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
         # In correlated mode, we need to load existing trajectories, and find their maximum length
         # test_padding_len = train_padding_len = args.max_traj_len
@@ -837,7 +879,6 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
         attack_eval_neg_label = eval_neg_label if not isinstance(
             attack_eval_neg_label, np.ndarray) else np.vstack((attack_eval_neg_label, eval_neg_label))
 
-    logger.info("preparing train data for classifier training ...")
     # Instanciating xgboost DMatrix with positive/negative train data
     # attack_train_pos_data, attack_train_pos_label = attack_train_positive_data
     # attack_train_neg_data, attack_train_neg_label = attack_train_negative_data
@@ -845,9 +886,12 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
     attack_train_data_y = np.vstack((attack_train_pos_label, attack_train_neg_label))
     attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
     attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
-    classifier_train_data = xgb.DMatrix(attack_train_data_x, attack_train_data_y)
 
-    logger.info("preparing eval data for classifier training ...")
+    np.save(pair_path_results + '/train_x', attack_train_data_x)
+    np.save(pair_path_results + '/train_y', attack_train_data_y)
+    logger.info("saving train data for classifier training ... Done")
+
+
     # Instanciating xgboost DMatrix with positive/negative train data
     # attack_eval_pos_data, attack_eval_pos_label = attack_eval_positive_data
     # attack_eval_neg_data, attack_eval_neg_label = attack_eval_negative_data
@@ -855,7 +899,11 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
     attack_eval_data_y = np.vstack((attack_eval_pos_label, attack_eval_neg_label))
     attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
     attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
-    classifier_eval_data = xgb.DMatrix(attack_eval_data_x, attack_eval_data_y)
+
+    np.save(pair_path_results + '/eval_x', attack_eval_data_x)
+    np.save(pair_path_results + '/eval_y', attack_eval_data_y)
+    logger.info("saving eval data for classifier training ... Done")
+
 
     # This part is in parallel with the above few lines WRT getting the data to be fed into XGBoost DMatrix
     # comment out if needed!
@@ -877,10 +925,6 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
     #         e_input = np.vstack((e_input, np.load(f)))
     # classifier_eval_data = xgb.DMatrix(e_input) # Note that in this way, the label needs to be extracted from the arrays
 
-    logger.info("classifier training ...")
-    attack_classifier = train_classifier(classifier_train_data, classifier_eval_data, max_depth=args.max_depth,
-                                         num_round=args.xgb_n_rounds, eta=args.xg_eta)
-    logger.info("training finished --> generating predictions")
     # Positive pairs
     train_seed, test_seed = get_seeds_pairs(1, args.target_seeds, test=True)
     attack_train_positive_data, _ = create_pairs(
@@ -899,22 +943,16 @@ def train_attack_model_v3(attack_path, file_path_results, state_dim, action_dim,
         test_padding_len=test_padding_len,
         train_padding_len=train_padding_len
     )
-    
+
     final_train_dataset_pos, final_train_dataset_pos_label = attack_train_positive_data
     final_train_dataset_neg, final_train_dataset_neg_label = attack_train_negative_data
     attack_test_data_x = np.vstack((final_train_dataset_pos, final_train_dataset_neg))
     attack_test_data_y = np.vstack((final_train_dataset_pos_label, final_train_dataset_neg_label))
     attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
     attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
-    classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
-    # prediction phase using the trained attack classifier
-    classifier_predictions = attack_classifier.predict(classifier_test_data)
 
-    # NOTE: the number of predictions cannot be more than then number of rows in attack_test_data_x
-    # Adjusting num_predictions accordingly
-    num_rows, num_columns = attack_test_data_x.shape
-    num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
-    print_experiment(args.env, args.shadow_seeds, args.target_seeds, args.attack_thresholds,
-                     num_predictions, args.max_traj_len, args.num_models)
-    # return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds[0], num_predictions)
-    return generate_metrics(classifier_predictions, attack_test_data_y, args.attack_thresholds, num_predictions)
+    np.save(pair_path_results + '/test_x', attack_test_data_x)
+    np.save(pair_path_results + '/test_y', attack_test_data_y)
+    logger.info("saving test data for prediction ... Done")
+
+

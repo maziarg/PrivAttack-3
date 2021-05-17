@@ -47,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument("--tau", default=0.005)  # Target network update rate
     parser.add_argument("--lmbda", default=0.75)  # Weighting for clipped double Q-learning in BCQ
     parser.add_argument("--phi", default=0.05)  # Max perturbation hyper-parameter for BCQ
-    parser.add_argument("--train_behavioral", action="store_true")  # If true, train behavioral (DDPG)
+    parser.add_argument("--create_pairs", action="store_true")  # If true, creates positive and negative pairs
     parser.add_argument("--train_policy", action="store_true")  # If true, train policy (BCQ)
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
     parser.add_argument("--attack_thresholds", nargs='+', type=float)  # Threshold for attack training
@@ -91,16 +91,30 @@ if __name__ == "__main__":
     print(f"Setting: Training Attack, Env: {args.env}, Shadow Seeds: {args.shadow_seeds}, "
           f"Target Seeds: {args.target_seeds}Max Trajectory Length: {args.max_traj_len}")
 
-    attack_path = f"{args.env}/{args.max_timesteps}"
+    attack_path = os.path.expanduser('~') + f"/learning_output/{args.env}/{args.max_timesteps}"
 
     # *********************************** Logging Config ********************************************
     file_path_results = args.attack_final_results + f"/{args.env}/MaxT_{args.max_timesteps}/" \
                                                     f"bcqMaxT_{args.bcq_max_timesteps}/MaxTraj_{args.max_traj_len}/" \
                                                     f"{CORRELATION_MAP.get(args.correlation)}"
+
     if not os.path.exists(file_path_results):
         os.makedirs(file_path_results)
-    logging.basicConfig(level=logging.DEBUG, filename=file_path_results + "/" +
-                                                      str(datetime.datetime.now()).replace(" ", "_") + "_log.txt")
+
+    pair_path_results = file_path_results + f"/pairs/train_ShSeed_{args.shadow_seeds}_TaSeed_{args.target_seeds}" \
+                                            f"_in_{args.in_traj_size}_out_{args.out_traj_size}" \
+                                            f"_ratio_{args.ratio_size_prediction}"
+
+    if not os.path.exists(pair_path_results):
+        os.makedirs(pair_path_results)
+
+    if args.create_pairs:
+        logging.basicConfig(level=logging.DEBUG, filename=file_path_results + "/" +
+                                                          str(datetime.datetime.now()).replace(" ", "_") + "_log.txt")
+    else:
+        logging.basicConfig(level=logging.DEBUG, filename=pair_path_results + "/" +
+                                                          str(datetime.datetime.now()).replace(" ", "_") + "_log.txt")
+
     logging.getLogger().addHandler(logging.StreamHandler())
 
     header = "===================== Experiment configuration ========================"
@@ -131,7 +145,10 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    experiment.run_experiments_v2(attack_path, file_path_results, state_dim, action_dim, device, args)
+    if args.create_pairs:
+        experiment.run_experiments_v2(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args)
+    else:
+        experiment.run_classifier(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args)
 
 
     #training_iters = 0

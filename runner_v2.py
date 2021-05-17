@@ -271,21 +271,21 @@ if __name__ == "__main__":
         print("Train_behavioral and generate_buffer cannot both be true.")
         exit()
 
-    attack_path = f"{args.env}/{args.max_timesteps}/{args.seed}/{args.max_traj_len}"
+    attack_path = f"~/learning_output/{args.env}/{args.max_timesteps}/{args.seed}/{args.max_traj_len}"
 
-    if not os.path.exists(f"./{attack_path}/results"):
-        os.makedirs(f"./{attack_path}/results")
+    if not os.path.exists(f"{attack_path}/results"):
+        os.makedirs(f"{attack_path}/results")
 
-    if not os.path.exists(f"./{attack_path}/models"):
-        os.makedirs(f"./{attack_path}/models")
+    if not os.path.exists(f"{attack_path}/models"):
+        os.makedirs(f"{attack_path}/models")
 
-    if not os.path.exists(f"./{attack_path}/buffers"):
-        os.makedirs(f"./{attack_path}/buffers")
+    if not os.path.exists(f"{attack_path}/buffers"):
+        os.makedirs(f"{attack_path}/buffers")
 
     # if not os.path.exists(f"./{attack_path}/attack_outputs"):
     #     os.makedirs(f"./{attack_path}/attack_outputs")
-    if not os.path.exists("./attack_outputs"):
-        os.makedirs(f"./attack_outputs")
+    # if not os.path.exists("./attack_outputs"):
+    #     os.makedirs(f"./attack_outputs")
 
     env = gym.make(args.env)
 
