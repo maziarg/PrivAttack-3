@@ -101,9 +101,9 @@ if __name__ == "__main__":
     if not os.path.exists(file_path_results):
         os.makedirs(file_path_results)
 
-    pair_path_results = file_path_results + f"/pairs/train_ShSeed_{args.shadow_seeds}_TaSeed_{args.target_seeds}" \
-                                            f"_in_{args.in_traj_size}_out_{args.out_traj_size}" \
-                                            f"_ratio_{args.ratio_size_prediction}"
+    pair_path_results = file_path_results + f"/pairs/train_NumModel_{args.num_models}_ShSeed_{args.shadow_seeds}_" \
+                                            f"TaSeed_{args.target_seeds}_in_{args.in_traj_size}_" \
+                                            f"out_{args.out_traj_size}_ratio_{args.ratio_size_prediction}"
 
     if not os.path.exists(pair_path_results):
         os.makedirs(pair_path_results)

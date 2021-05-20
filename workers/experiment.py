@@ -50,7 +50,6 @@ def run_experiments_v2(attack_path, file_path_results, pair_path_results, state_
 
 def run_classifier(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args):
 
-    results = []
     # for (attack_size, attack_threshold) in product_res:
     train_attack_model_v4(file_path_results, pair_path_results, args)
 

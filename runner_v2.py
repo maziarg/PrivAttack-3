@@ -22,7 +22,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
     # Initialize and load policy
     policy = DDPG.DDPG(state_dim, action_dim, max_action, device)  # , args.discount, args.tau)
-    if args.generate_buffer: policy.load(f"./{attack_path}/models/behavioral_{setting}")
+    if args.generate_buffer: policy.load(f"{attack_path}/models/behavioral_{setting}")
 
     # Initialize buffer
     replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
@@ -83,18 +83,18 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
         # Evaluate episode
         if args.train_behavioral and (t + 1) % args.eval_freq == 0:
             evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
-            np.save(f"./{attack_path}/results/behavioral_{setting}", evaluations)
-            policy.save(f"./{attack_path}/models/behavioral_{setting}")
+            np.save(f"{attack_path}/results/behavioral_{setting}", evaluations)
+            policy.save(f"{attack_path}/models/behavioral_{setting}")
 
     # Save final policy
     if args.train_behavioral:
-        policy.save(f"./{attack_path}/models/behavioral_{setting}")
+        policy.save(f"{attack_path}/models/behavioral_{setting}")
 
     # Save final buffer and performance
     else:
         evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
-        np.save(f"./{attack_path}/results/buffer_performance_{setting}", evaluations)
-        replay_buffer.save(f"./{attack_path}/buffers/{buffer_name}")
+        np.save(f"{attack_path}/results/buffer_performance_{setting}", evaluations)
+        replay_buffer.save(f"{attack_path}/buffers/{buffer_name}")
 
 
 # Trains BCQ offline
@@ -108,7 +108,7 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
 
     # Load buffer
     replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
-    replay_buffer.load(f"./{attack_path}/buffers/{buffer_name}")
+    replay_buffer.load(f"{attack_path}/buffers/{buffer_name}")
 
     evaluations = []
     episode_num = 0
@@ -119,11 +119,11 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
         policy.train(replay_buffer, iterations=int(args.eval_freq), batch_size=args.batch_size)
 
         evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
-        np.save(f"./{attack_path}/results/BCQ_{setting}", evaluations)
+        np.save(f"{attack_path}/results/BCQ_{setting}", evaluations)
 
         training_iters += args.eval_freq
         print(f"Training iterations: {training_iters}")
-    policy.save(f"./{attack_path}/models/target_{setting}")
+    policy.save(f"{attack_path}/models/target_{setting}")
 
 
 # Runs policy for X episodes and returns average reward
@@ -159,7 +159,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
 
     # Initialize and load policy
     policy = BCQ.BCQ(state_dim, action_dim, max_action, device, args.discount, args.tau, args.lmbda, args.phi)
-    policy.load(f"./{attack_path}/models/target_{setting}")
+    policy.load(f"{attack_path}/models/target_{setting}")
 
     # Initialize buffer
     replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.bcq_max_timesteps)
@@ -205,8 +205,8 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
 
     # Save final buffer and performance
     evaluations.append(eval_policy(policy, args.env, args.seed, max_episode_step=args.max_traj_len))
-    np.save(f"./{attack_path}/results/target_buffer_performance_{setting}", evaluations)
-    replay_buffer.save(f"./{attack_path}/buffers/{buffer_name}")
+    np.save(f"{attack_path}/results/target_buffer_performance_{setting}", evaluations)
+    replay_buffer.save(f"{attack_path}/buffers/{buffer_name}")
 
 
 if __name__ == "__main__":
@@ -271,7 +271,7 @@ if __name__ == "__main__":
         print("Train_behavioral and generate_buffer cannot both be true.")
         exit()
 
-    attack_path = f"~/learning_output/{args.env}/{args.max_timesteps}/{args.seed}/{args.max_traj_len}"
+    attack_path = f"{os.path.expanduser('~')}/learning_output/{args.env}/{args.max_timesteps}/{args.seed}/{args.max_traj_len}"
 
     if not os.path.exists(f"{attack_path}/results"):
         os.makedirs(f"{attack_path}/results")
