@@ -819,7 +819,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
     param_test1 = {
-        'max_depth': range(2, 6, 2),
+        'max_depth': range(2, 10, 2),
         'min_child_weight': range(1, 6, 2)
     }
     gsearch1 = GridSearchCV(
