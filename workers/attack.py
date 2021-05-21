@@ -698,8 +698,6 @@ def modelfit(alg, attack_train_eval_x, attack_train_eval_y, useTrainCV=True, cv_
                           metrics='mae', early_stopping_rounds=early_stopping_rounds, verbose_eval=False)
         alg.set_params(n_estimators=cvresult.shape[0])
 
-    attack_train_eval_y = np.ravel(attack_train_eval_y)
-
     # Fit the algorithm on the data
     alg.fit(attack_train_eval_x, attack_train_eval_y, eval_metric='mae')
 
@@ -798,6 +796,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
 
     attack_train_eval_x = np.vstack((attack_train_data_x, attack_eval_data_x))
     attack_train_eval_y = np.vstack((attack_train_data_y, attack_eval_data_y))
+    attack_train_eval_y = np.ravel(attack_train_eval_y)
     logger.info("loading the train/eval pairs ... Done")
     logger.info("Setting up the xgb properties ...")
     xgb1 = XGBClassifier(
