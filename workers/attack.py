@@ -737,7 +737,8 @@ def train_classifier(xgb1, xgb_train, xgb_eval, max_depth=20, num_round=150, eta
              'nthread': 4,
              'scale_pos_weight': 1,
              'seed': 27,
-             'eval_metric': 'mae'}
+             'eval_metric': 'mae',
+             'n_jobs': -1}
 
     watch_list = [(xgb_eval, 'eval'), (xgb_train, 'train')]
     evals_result = {}
@@ -818,11 +819,11 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
     param_test1 = {
-        'max_depth': range(2, 10, 2),
+        'max_depth': range(2, 6, 2),
         'min_child_weight': range(1, 6, 2)
     }
     gsearch1 = GridSearchCV(
-        estimator=xgb1, param_grid=param_test1, scoring='neg_mean_absolute_error', n_jobs=4, cv=5)
+        estimator=xgb1, param_grid=param_test1, scoring='neg_mean_absolute_error', cv=5)
 
     gsearch1.fit(attack_train_eval_x, attack_train_eval_y)
     # logger.info(gsearch1.cv_results_)
@@ -852,7 +853,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     }
 
     gsearch3 = GridSearchCV(
-        estimator=xgb1, param_grid = param_test3, scoring='neg_mean_absolute_error', n_jobs=4, cv=5)
+        estimator=xgb1, param_grid = param_test3, scoring='neg_mean_absolute_error', cv=5)
     gsearch3.fit(attack_train_eval_x, attack_train_eval_y)
     logger.info(f"best parameter: {gsearch3.best_params_}")
     logger.info(f"best score: {gsearch3.best_score_}")
@@ -866,7 +867,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     }
 
     gsearch4 = GridSearchCV(estimator=xgb1, param_grid=param_test4,
-                            scoring='neg_mean_absolute_error', n_jobs=4, cv=5)
+                            scoring='neg_mean_absolute_error', cv=5)
     gsearch4.fit(attack_train_eval_x, attack_train_eval_y)
     logger.info(f"best parameter: {gsearch4.best_params_}")
     logger.info(f"best score: {gsearch4.best_score_}")
@@ -878,7 +879,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
         'reg_alpha': [1e-5, 1e-3, 1e-2, 0.1, 1, 10, 100]
     }
     gsearch5 = GridSearchCV(estimator=xgb1, param_grid = param_test5,
-                            scoring='neg_mean_absolute_error',n_jobs=4, cv=5)
+                            scoring='neg_mean_absolute_error', cv=5)
     gsearch5.fit(attack_train_eval_x, attack_train_eval_y)
     logger.info(f"best parameter: {gsearch5.best_params_}")
     logger.info(f"best score: {gsearch5.best_score_}")
