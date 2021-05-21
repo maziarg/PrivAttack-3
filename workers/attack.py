@@ -542,34 +542,62 @@ def baseline_accuracy(labels_test, num_predictions):
     return output_prec_recall(true_positives, true_negatives, false_negatives, false_positives, num_predictions)
 
 
-def accuracy_report_2(classifier_predictions, labels_test, threshold, num_predictions, t, results):
-    false_positives = 0
-    false_negatives = 0
-    true_positives = 0
-    true_negatives = 0
-    for i in range(num_predictions):
-        if classifier_predictions[i] >= t and labels_test[i] == 1:
-            true_positives += 1
-        elif classifier_predictions[i] < t and labels_test[i] == 0:
-            true_negatives += 1
+def accuracy_report_2(classifier_predictions, labels_test, threshold, num_predictions, results):
+    # false_positives = 0
+    # false_negatives = 0
+    # true_positives = 0
+    # true_negatives = 0
+    # for i in range(num_predictions):
+    #     if classifier_predictions[i] >= threshold[i] and labels_test[i] == 1:
+    #         true_positives += 1
+    #     elif classifier_predictions[i] < threshold[i] and labels_test[i] == 0:
+    #         true_negatives += 1
+    #
+    #     # false negative (classifier is saying out but labels say in)
+    #     elif classifier_predictions[i] < threshold[i] and labels_test[i] == 1:
+    #         false_negatives += 1
+    #
+    #     # false positive (classifier is saying in but labels say out)
+    #     elif classifier_predictions[i] >= threshold[i] and labels_test[i] == 0:
+    #         false_positives += 1
+    # logger.info(f"Threshold = {threshold[i]}: true_positive = {true_positives}, true_negative = {true_negatives}, "
+    #             f"false_positive = {false_positives}, false_negative={false_negatives}")
+    accuracy = np.zeros(len(threshold))
+    precision = np.zeros(len(threshold))
+    recall = np.zeros(len(threshold))
+    RMSE_e_i = np.zeros(len(threshold))
+    mcc = np.zeros(len(threshold))
+    f1 = np.zeros(len(threshold))
+    for j in range(len(threshold)):
+        false_positives = 0
+        false_negatives = 0
+        true_positives = 0
+        true_negatives = 0
+        for i in range(num_predictions):
+            if classifier_predictions[i] >= threshold[j] and labels_test[i] == 1:
+                true_positives += 1
+            elif classifier_predictions[i] < threshold[j] and labels_test[i] == 0:
+                true_negatives += 1
 
-        # false negative (classifier is saying out but labels say in)
-        elif classifier_predictions[i] < t and labels_test[i] == 1:
-            false_negatives += 1
+            # false negative (classifier is saying out but labels say in)
+            elif classifier_predictions[i] < threshold[j] and labels_test[i] == 1:
+                false_negatives += 1
 
-        # false positive (classifier is saying in but labels say out)
-        elif classifier_predictions[i] >= t and labels_test[i] == 0:
-            false_positives += 1
-    logger.info(f"Threshold = {t}: true_positive = {true_positives}, true_negative = {true_negatives}, "
-                f"false_positive = {false_positives}, false_negative={false_negatives}")
+            # false positive (classifier is saying in but labels say out)
+            elif classifier_predictions[i] >= threshold[j] and labels_test[i] == 0:
+                false_positives += 1
+        logger.info(
+            f"Threshold = {threshold[j]}: true_positive = {true_positives}, true_negative = {true_negatives}, "
+            f"false_positive = {false_positives}, false_negative={false_negatives}")
 
-    accuracy, precision, recall, mcc, f1 = output_prec_recall(true_positives, true_negatives, false_negatives,
-    false_positives, num_predictions)
-    RMSE_e_i = rsme(calc_errors(classifier_predictions, labels_test, t, num_predictions))
+        accuracy[j], precision[j], recall[j], mcc[j], f1[j] = output_prec_recall(true_positives, true_negatives,
+                                                                                 false_negatives, false_positives,
+                                                                                 num_predictions)
+        RMSE_e_i[j] = rsme(calc_errors(classifier_predictions, labels_test, threshold[j], num_predictions))
 
-    results = f"{results}\nThreshold = {t}: true_positive = {true_positives}, " \
-              f"true_negative = {true_negatives}, false_positive = {false_positives}, " \
-              f"false_negative={false_negatives}, MCC = {mcc}, F1 = {f1}"
+        results = f"{results}\nThreshold = {threshold[j]}: true_positive = {true_positives}, " \
+                  f"true_negative = {true_negatives}, false_positive = {false_positives}, " \
+                  f"false_negative={false_negatives}, MCC = {mcc[j]}, F1 = {f1[j]}"
     return accuracy, precision, recall, RMSE_e_i, results
 
 def accuracy_report(classifier_predictions, labels_test, threshold, num_predictions):
@@ -662,22 +690,24 @@ def generate_metrics(classifier_predictions, labels_test, threshold, num_predict
     return true_positive, true_negative, false_positive, false_negative
 
 
-def modelfit(alg, attack_train_eval_x, attack_train_eval_y, t, useTrainCV=True, cv_folds=5, early_stopping_rounds=10):
+def modelfit(alg, attack_train_eval_x, attack_train_eval_y, useTrainCV=True, cv_folds=5, early_stopping_rounds=10):
     if useTrainCV:
         xgb_param = alg.get_xgb_params()
         xgtrain = xgb.DMatrix(attack_train_eval_x, label=attack_train_eval_y)
         cvresult = xgb.cv(xgb_param, xgtrain, num_boost_round=alg.get_params()['n_estimators'], nfold=cv_folds,
-                          metrics=f"error@{t}", early_stopping_rounds=early_stopping_rounds, verbose_eval=False)
+                          metrics='mae', early_stopping_rounds=early_stopping_rounds, verbose_eval=False)
         alg.set_params(n_estimators=cvresult.shape[0])
 
+    attack_train_eval_y = np.ravel(attack_train_eval_y)
+
     # Fit the algorithm on the data
-    alg.fit(attack_train_eval_x, attack_train_eval_y, eval_metric=f"error@{t}")
+    alg.fit(attack_train_eval_x, attack_train_eval_y, eval_metric='mae')
 
     # Predict training set:
     dtrain_predictions = alg.predict(attack_train_eval_x)
-    dtrain_predictions = [0 if val < t else 1 for val in dtrain_predictions]
+    # dtrain_predictions = [0 if val < t else 1 for val in dtrain_predictions]
     dtrain_predprob = alg.predict_proba(attack_train_eval_x)[:, 1]
-    dtrain_predprob = [0 if val < t else 1 for val in dtrain_predprob]
+    # dtrain_predprob = [0 if val < t else 1 for val in dtrain_predprob]
 
 
 
@@ -705,11 +735,11 @@ def train_classifier(xgb1, xgb_train, xgb_eval, max_depth=20, num_round=150, eta
              'gamma': xgb1.get_params()['gamma'],
              'subsample': xgb1.get_params()['subsample'],
              'colsample_bytree': xgb1.get_params()['colsample_bytree'],
-             'objective': 'binary:logistic',
+             'objective': 'reg:logistic',
              'nthread': 4,
              'scale_pos_weight': 1,
-             'seed': 27
-             }
+             'seed': 27,
+             'eval_metric': 'mae'}
 
     watch_list = [(xgb_eval, 'eval'), (xgb_train, 'train')]
     evals_result = {}
@@ -778,115 +808,111 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
         gamma=0,
         subsample=0.8,
         colsample_bytree=0.8,
-        objective='binary:logistic',
+        objective='reg:logistic',
         nthread=4,
         scale_pos_weight=1,
         seed=27,
-        use_label_encoder=False,
-        eval_metric='error')
+        use_label_encoder=False
+    )
     results = ""
-    final_params = {}
-    for t in args.attack_thresholds:
-        modelfit(xgb1, attack_train_eval_x, attack_train_eval_y, t)
 
-        param_test1 = {
-            'max_depth': range(2, 20, 2),
-            'min_child_weight': range(1, 10, 2)
-        }
-        gsearch1 = GridSearchCV(
-            estimator=xgb1, param_grid=param_test1, scoring='roc_auc', n_jobs=4, cv=5)
+    modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
-        gsearch1.fit(attack_train_eval_x, attack_train_eval_y)
-        # logger.info(gsearch1.cv_results_)
-        logger.info(f"best parameter: {gsearch1.best_params_}")
-        logger.info(f"best score: {gsearch1.best_score_}")
+    param_test1 = {
+        'max_depth': range(2, 20, 2),
+        'min_child_weight': range(1, 10, 2)
+    }
+    gsearch1 = GridSearchCV(
+        estimator=xgb1, param_grid=param_test1, scoring='neg_mean_absolute_error', n_jobs=4, cv=5)
 
-        param_test2 = {
-            'max_depth': range(3, 20, 2),
-            'min_child_weight': range(2, 10, 2)
-        }
-        gsearch2 = GridSearchCV(
-            estimator=xgb1, param_grid=param_test2, scoring='roc_auc', n_jobs=4, cv=5)
-        gsearch2.fit(attack_train_eval_x, attack_train_eval_y)
-        logger.info(f"best parameter: {gsearch2.best_params_}")
-        logger.info(f"best score: {gsearch2.best_score_}")
+    gsearch1.fit(attack_train_eval_x, attack_train_eval_y)
+    # logger.info(gsearch1.cv_results_)
+    logger.info(f"best parameter: {gsearch1.best_params_}")
+    logger.info(f"best score: {gsearch1.best_score_}")
 
-        # modelfit(gsearch1.best_estimator_, attack_train_eval_x, attack_train_eval_y, t)
-        xgb1.set_params(max_depth=gsearch1.best_params_['max_depth'] if gsearch1.best_score_ >= gsearch2.best_score_
-        else gsearch2.best_params_['max_depth'], min_child_weight=gsearch1.best_params_['min_child_weight']
-        if gsearch1.best_score_ >= gsearch2.best_score_ else gsearch2.best_params_['min_child_weight'])
+    param_test2 = {
+        'max_depth': range(3, 20, 2),
+        'min_child_weight': range(2, 10, 2)
+    }
+    gsearch2 = GridSearchCV(
+        estimator=xgb1, param_grid=param_test2, scoring='neg_mean_absolute_error', n_jobs=4, cv=5)
+    gsearch2.fit(attack_train_eval_x, attack_train_eval_y)
+    logger.info(f"best parameter: {gsearch2.best_params_}")
+    logger.info(f"best score: {gsearch2.best_score_}")
 
-        param_test3 = {
-            'gamma': [i / 10.0 for i in range(0, 5)]
-        }
+    # modelfit(gsearch1.best_estimator_, attack_train_eval_x, attack_train_eval_y, t)
+    xgb1.set_params(max_depth=gsearch1.best_params_['max_depth'] if gsearch1.best_score_ >= gsearch2.best_score_
+    else gsearch2.best_params_['max_depth'], min_child_weight=gsearch1.best_params_['min_child_weight']
+    if gsearch1.best_score_ >= gsearch2.best_score_ else gsearch2.best_params_['min_child_weight'])
 
-        gsearch3 = GridSearchCV(
-            estimator=xgb1, param_grid = param_test3, scoring='roc_auc', n_jobs=4, cv=5)
-        gsearch3.fit(attack_train_eval_x, attack_train_eval_y)
-        logger.info(f"best parameter: {gsearch3.best_params_}")
-        logger.info(f"best score: {gsearch3.best_score_}")
+    param_test3 = {
+        'gamma': [i / 10.0 for i in range(0, 5)]
+    }
 
-        xgb1.set_params(n_estimators=args.xgb_n_rounds, gamma=gsearch3.best_params_['gamma'])
-        modelfit(xgb1, attack_train_eval_x, attack_train_eval_y, t)
+    gsearch3 = GridSearchCV(
+        estimator=xgb1, param_grid = param_test3, scoring='neg_mean_absolute_error', n_jobs=4, cv=5)
+    gsearch3.fit(attack_train_eval_x, attack_train_eval_y)
+    logger.info(f"best parameter: {gsearch3.best_params_}")
+    logger.info(f"best score: {gsearch3.best_score_}")
 
-        param_test4 = {
-            'subsample': [i / 100 for i in range(50, 100, 5)],
-            'colsample_bytree': [i / 10.0 for i in range(6, 10)]
-        }
+    xgb1.set_params(n_estimators=args.xgb_n_rounds, gamma=gsearch3.best_params_['gamma'])
+    modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
-        gsearch4 = GridSearchCV(estimator=xgb1, param_grid=param_test4,
-                                scoring='roc_auc', n_jobs=4, cv=5)
-        gsearch4.fit(attack_train_eval_x, attack_train_eval_y)
-        logger.info(f"best parameter: {gsearch4.best_params_}")
-        logger.info(f"best score: {gsearch4.best_score_}")
+    param_test4 = {
+        'subsample': [i / 100 for i in range(50, 100, 5)],
+        'colsample_bytree': [i / 10.0 for i in range(6, 10)]
+    }
 
-        xgb1.set_params(subsample=gsearch4.best_params_['subsample'],
-                        colsample_bytree=gsearch4.best_params_['colsample_bytree'])
+    gsearch4 = GridSearchCV(estimator=xgb1, param_grid=param_test4,
+                            scoring='neg_mean_absolute_error', n_jobs=4, cv=5)
+    gsearch4.fit(attack_train_eval_x, attack_train_eval_y)
+    logger.info(f"best parameter: {gsearch4.best_params_}")
+    logger.info(f"best score: {gsearch4.best_score_}")
 
-        param_test5 = {
-            'reg_alpha': [1e-5, 1e-3, 0.005, 1e-2, 0.05, 0.1, 0.5, 1, 10, 50, 100]
-        }
-        gsearch5 = GridSearchCV(estimator=xgb1, param_grid = param_test5,
-                                scoring='roc_auc',n_jobs=4, cv=5)
-        gsearch5.fit(attack_train_eval_x, attack_train_eval_y)
-        logger.info(f"best parameter: {gsearch5.best_params_}")
-        logger.info(f"best score: {gsearch5.best_score_}")
+    xgb1.set_params(subsample=gsearch4.best_params_['subsample'],
+                    colsample_bytree=gsearch4.best_params_['colsample_bytree'])
 
-        xgb1.set_params(n_estimators=args.xgb_n_rounds, reg_alpha=gsearch5.best_params_['reg_alpha'])
-        modelfit(xgb1, attack_train_eval_x, attack_train_eval_y, t)
+    param_test5 = {
+        'reg_alpha': [1e-5, 1e-3, 0.005, 1e-2, 0.05, 0.1, 0.5, 1, 10, 50, 100]
+    }
+    gsearch5 = GridSearchCV(estimator=xgb1, param_grid = param_test5,
+                            scoring='neg_mean_absolute_error',n_jobs=4, cv=5)
+    gsearch5.fit(attack_train_eval_x, attack_train_eval_y)
+    logger.info(f"best parameter: {gsearch5.best_params_}")
+    logger.info(f"best score: {gsearch5.best_score_}")
 
-        final_params[args.attack_thresholds.index(t)] = xgb1
+    xgb1.set_params(n_estimators=args.xgb_n_rounds, reg_alpha=gsearch5.best_params_['reg_alpha'])
+    modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
-        classifier_train_data = xgb.DMatrix(attack_train_data_x, attack_train_data_y)
-        classifier_eval_data = xgb.DMatrix(attack_eval_data_x, attack_eval_data_y)
+    classifier_train_data = xgb.DMatrix(attack_train_data_x, attack_train_data_y)
+    classifier_eval_data = xgb.DMatrix(attack_eval_data_x, attack_eval_data_y)
 
-        logger.info("classifier training ...")
-        attack_classifier = train_classifier(xgb1, classifier_train_data, classifier_eval_data,
-                                             max_depth=xgb1.get_params()['max_depth'],
-                                             num_round=args.xgb_n_rounds, eta=args.xg_eta)
+    logger.info("classifier training ...")
+    attack_classifier = train_classifier(xgb1, classifier_train_data, classifier_eval_data,
+                                         max_depth=xgb1.get_params()['max_depth'],
+                                         num_round=args.xgb_n_rounds, eta=args.xg_eta)
 
-        logger.info("training finished ...")
-        logger.info("loading the test pairs ...")
+    logger.info("training finished ...")
+    logger.info("loading the test pairs ...")
 
-        attack_test_data_x = np.load(pair_path_results + '/test_x.npy')
-        attack_test_data_y = np.load(pair_path_results + '/test_y.npy')
+    attack_test_data_x = np.load(pair_path_results + '/test_x.npy')
+    attack_test_data_y = np.load(pair_path_results + '/test_y.npy')
 
-        classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
+    classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
 
-        logger.info("predicting ...")
+    logger.info("predicting ...")
 
-        # prediction phase using the trained attack classifier
-        classifier_predictions = attack_classifier.predict(classifier_test_data)
-        logger.info("predicting ... Done")
-        # NOTE: the number of predictions cannot be more than then number of rows in attack_test_data_x
-        # Adjusting num_predictions accordingly
-        num_rows, num_columns = attack_test_data_x.shape
-        num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
-        _, _, _, _, results = accuracy_report_2(
-            classifier_predictions, attack_test_data_y, args.attack_thresholds, num_predictions, t, results)
+    # prediction phase using the trained attack classifier
+    classifier_predictions = attack_classifier.predict(classifier_test_data)
+    logger.info("predicting ... Done")
+    # NOTE: the number of predictions cannot be more than then number of rows in attack_test_data_x
+    # Adjusting num_predictions accordingly
+    num_rows, num_columns = attack_test_data_x.shape
+    num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
+    _, _, _, _, results = accuracy_report_2(
+        classifier_predictions, attack_test_data_y, args.attack_thresholds, num_predictions, results)
 
-    for i in range(len(final_params)):
-        logger.info(f"Threshold {args.attack_thresholds[i]}:\n {final_params[i]}")
+    logger.info(f"Final tuned parameters:\n {xgb1}")
 
     print_experiment(args.env, args.shadow_seeds, args.target_seeds, args.attack_thresholds,
                      num_predictions, args.max_traj_len, args.num_models)
