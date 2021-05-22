@@ -70,8 +70,28 @@ if __name__ == "__main__":
     parser.add_argument('--correlation', default='c', choices=["c", 'd', 's'], help="Activate semi/de/correlated mode.")
     parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
     parser.add_argument('--xg_eta', default=0.2, type=float, help="xgboost learning rate")
-    parser.add_argument('--xgb_n_rounds', default=150, type=int, help="xgboost number of decision trees")
     parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
+
+    #xgboost hyper parameter tuning
+    parser.add_argument("--cv_tune_xgb", action="store_true")  # If true, it tunes the xgb hyper parameters
+
+    parser.add_argument('--max_depth_vector', nargs='+', type=int, help="Typically between 3 and 10, but could be "
+                                                                        "higher.  e.g.: 2 4 6 8 10")
+    parser.add_argument('--min_child_weight_vector', nargs='+', type=int, help='Default is 1, and can change between'
+                                                                               ' 0 and infinity. e.g.: 1 3 5')
+
+    parser.add_argument('--xgb_n_rounds', default=1000, type=int, help="xgboost maximum n_estimators")
+
+    parser.add_argument('--gamma_vector', nargs='+', type=float, help="e.g.: 0 0.1 0.2 0.3 0.4 0.5")
+
+    parser.add_argument('--subsample_vector', nargs='+', type=float, help="Typically between 0.5 and 1."
+                                                                          "e.g.: 0.6 0.7 0.75 0.8 0.9")
+
+    parser.add_argument('--colsample_bytree_vector', nargs='+', type=float, help="Typically between 0.5 and 1."
+                                                                          "e.g.: 0.6 0.7 0.75 0.8 0.9")
+
+    parser.add_argument("--reg_alpha_vector", nargs='+', type=float, help="e.g: 1e-5 1e-3 0.005 1e-2 0.1 1 10 100")
+
 
     args = parser.parse_args()
 
