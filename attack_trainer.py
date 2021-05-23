@@ -3,6 +3,10 @@ import os
 import datetime
 import time
 import logging
+import gym
+import numpy as np
+import torch
+from utils.configs import CORRELATED, DECORRELATED, SEMI_CORRELATED, CORRELATION_MAP
 
 # import yaml
 
@@ -13,11 +17,6 @@ from workers import attack, experiment
 from utils.configs import *
 from utils.helpers import str2bool
 logger = logging.getLogger(__name__)
-
-import gym
-import numpy as np
-import torch
-from utils.configs import CORRELATED, DECORRELATED, SEMI_CORRELATED, CORRELATION_MAP
 
 if __name__ == "__main__":
 
@@ -52,8 +51,8 @@ if __name__ == "__main__":
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
     parser.add_argument("--attack_thresholds", nargs='+', type=float)  # Threshold for attack training
     parser.add_argument("--attack_sizes", nargs='*', type=int)  # Attack training size
-    parser.add_argument('--out_traj_size', default=10, type=int)  # This is used to bound the number of test trajecotries
-    parser.add_argument('--in_traj_size', default=10, type=int)  # This is used to bound the number of train trajectories
+    parser.add_argument('--out_traj_size', default=10, type=int) # This is used to bound the number of test trajectories
+    parser.add_argument('--in_traj_size', default=10, type=int) # This is used to bound the number of train trajectories
     parser.add_argument('--ratio_size_prediction', default=0.25, type=float, help="determines the ratio of out- and "
                                                                                   "in-traj-sizes for making prediction "
                                                                                   "pairs")
@@ -65,22 +64,29 @@ if __name__ == "__main__":
                         help="size of the training set for the attack model")
     parser.add_argument('--run_multiple', default='no', help="choose a variable attribute with all others fixed")
     # parser.add_argument('--model', default='sac', help="model used to train the shadow_models")
-    parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  #Must be equal to the max_ep_length in trainer.py
+    parser.add_argument('--trajectory_length', nargs='*', default=1000, type=int)  # Must be equal to the
+    # max_ep_length in trainer.py
     parser.add_argument('--max_traj_len', default=1000, type=int)
     parser.add_argument('--correlation', default='c', choices=["c", 'd', 's'], help="Activate semi/de/correlated mode.")
-    parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
-    parser.add_argument('--xg_eta', default=0.2, type=float, help="xgboost learning rate")
     parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
 
-    #xgboost hyper parameter tuning
+    # xgboost initial parameter values or fixed parameter values in the case which we do not want to tune the parameters
+    parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
+    parser.add_argument('--xg_eta', default=0.2, type=float, help="xgboost learning rate")
+    parser.add_argument('--xgb_n_rounds', default=1000, type=int, help="xgboost maximum n_estimators")
+    parser.add_argument('--min_child_weight', default=1, type=int, help="xgboost min_child_weight")
+    parser.add_argument('--gamma', default=0, type=float, help="xgboost gamma")
+    parser.add_argument('--subsample', default=0.6, type=float, help="xgboost subsample")
+    parser.add_argument('--colsample_bytree', default=0.6, type=float, help="xgboost colsample_bytree")
+    parser.add_argument('--reg_alpha', default=10, type=float, help="xgboost reg_alpha")
+
+    # xgboost hyper parameter tuning (Leave any parameter that doesn't need to be tuned empty)
     parser.add_argument("--cv_tune_xgb", action="store_true")  # If true, it tunes the xgb hyper parameters
 
     parser.add_argument('--max_depth_vector', nargs='+', type=int, help="Typically between 3 and 10, but could be "
                                                                         "higher.  e.g.: 2 4 6 8 10")
     parser.add_argument('--min_child_weight_vector', nargs='+', type=int, help='Default is 1, and can change between'
                                                                                ' 0 and infinity. e.g.: 1 3 5')
-
-    parser.add_argument('--xgb_n_rounds', default=1000, type=int, help="xgboost maximum n_estimators")
 
     parser.add_argument('--gamma_vector', nargs='+', type=float, help="e.g.: 0 0.1 0.2 0.3 0.4 0.5")
 
@@ -91,7 +97,6 @@ if __name__ == "__main__":
                                                                           "e.g.: 0.6 0.7 0.75 0.8 0.9")
 
     parser.add_argument("--reg_alpha_vector", nargs='+', type=float, help="e.g: 1e-5 1e-3 0.005 1e-2 0.1 1 10 100")
-
 
     args = parser.parse_args()
 

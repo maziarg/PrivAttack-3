@@ -803,11 +803,12 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     xgb1 = XGBClassifier(
         learning_rate=args.xg_eta,
         n_estimators=args.xgb_n_rounds,
-        max_depth=5,
-        min_child_weight=1,
-        gamma=0,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        max_depth=args.max_depth,
+        min_child_weight=args.min_child_weight,
+        gamma=args.gamma,
+        subsample=args.subsample,
+        colsample_bytree=args.colsample_bytree,
+        reg_alpha=args.reg_alpha,
         objective='reg:logistic',
         nthread=4,
         scale_pos_weight=1,
@@ -821,17 +822,19 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
 
         modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
-        param_test1 = {
-            'max_depth': args.max_depth_vector,
-            'min_child_weight': args.min_child_weight_vector
-        }
-        gsearch1 = GridSearchCV(
-            estimator=xgb1, param_grid=param_test1, scoring='neg_mean_absolute_error', cv=5)
+        if args. max_depth_vector or args.min_child_weight_vector:
 
-        gsearch1.fit(attack_train_eval_x, attack_train_eval_y)
-        # logger.info(gsearch1.cv_results_)
-        logger.info(f"best parameter: {gsearch1.best_params_}")
-        logger.info(f"best score: {gsearch1.best_score_}")
+            param_test1 = {
+                'max_depth': args.max_depth_vector,
+                'min_child_weight': args.min_child_weight_vector
+            }
+            gsearch1 = GridSearchCV(
+                estimator=xgb1, param_grid=param_test1, scoring='neg_mean_absolute_error', cv=5)
+
+            gsearch1.fit(attack_train_eval_x, attack_train_eval_y)
+            # logger.info(gsearch1.cv_results_)
+            logger.info(f"best parameter: {gsearch1.best_params_}")
+            logger.info(f"best score: {gsearch1.best_score_}")
 
         # param_test2 = {
         #     'max_depth': range(3, 20, 2),
@@ -848,47 +851,55 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
         # else gsearch2.best_params_['max_depth'], min_child_weight=gsearch1.best_params_['min_child_weight']
         # if gsearch1.best_score_ >= gsearch2.best_score_ else gsearch2.best_params_['min_child_weight'])
 
-        xgb1.set_params(max_depth=gsearch1.best_params_['max_depth'],
-                        min_child_weight=gsearch1.best_params_['min_child_weight'])
+            xgb1.set_params(max_depth=gsearch1.best_params_['max_depth'],
+                            min_child_weight=gsearch1.best_params_['min_child_weight'])
+        if args.gamma_vector:
 
-        param_test3 = {
-            'gamma': args.gamma_vector
-        }
+            param_test3 = {
+                'gamma': args.gamma_vector
+            }
 
-        gsearch3 = GridSearchCV(
-            estimator=xgb1, param_grid = param_test3, scoring='neg_mean_absolute_error', cv=5)
-        gsearch3.fit(attack_train_eval_x, attack_train_eval_y)
-        logger.info(f"best parameter: {gsearch3.best_params_}")
-        logger.info(f"best score: {gsearch3.best_score_}")
+            gsearch3 = GridSearchCV(
+                estimator=xgb1, param_grid = param_test3, scoring='neg_mean_absolute_error', cv=5)
+            gsearch3.fit(attack_train_eval_x, attack_train_eval_y)
+            logger.info(f"best parameter: {gsearch3.best_params_}")
+            logger.info(f"best score: {gsearch3.best_score_}")
+            xgb1.set_params(gamma=gsearch3.best_params_['gamma'])
 
-        xgb1.set_params(n_estimators=args.xgb_n_rounds, gamma=gsearch3.best_params_['gamma'])
-        modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
+        if (args.max_depth_vector or args.min_child_weight_vector or args.gamma_vector) and \
+                (args.subsample_vector or args.colsample_bytree_vector or args.reg_alpha_vector):
 
-        param_test4 = {
-            'subsample': args.subsample_vector,
-            'colsample_bytree': args.colsample_bytree_vector
-        }
+            xgb1.set_params(n_estimators=args.xgb_n_rounds)
+            modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
-        gsearch4 = GridSearchCV(estimator=xgb1, param_grid=param_test4,
-                                scoring='neg_mean_absolute_error', cv=5)
-        gsearch4.fit(attack_train_eval_x, attack_train_eval_y)
-        logger.info(f"best parameter: {gsearch4.best_params_}")
-        logger.info(f"best score: {gsearch4.best_score_}")
+        if args.subsample_vector or args.colsample_bytree_vector:
+            param_test4 = {
+                'subsample': args.subsample_vector,
+                'colsample_bytree': args.colsample_bytree_vector
+            }
 
-        xgb1.set_params(subsample=gsearch4.best_params_['subsample'],
-                        colsample_bytree=gsearch4.best_params_['colsample_bytree'])
+            gsearch4 = GridSearchCV(estimator=xgb1, param_grid=param_test4,
+                                    scoring='neg_mean_absolute_error', cv=5)
+            gsearch4.fit(attack_train_eval_x, attack_train_eval_y)
+            logger.info(f"best parameter: {gsearch4.best_params_}")
+            logger.info(f"best score: {gsearch4.best_score_}")
 
-        param_test5 = {
-            'reg_alpha': args.reg_alpha_vector
-        }
-        gsearch5 = GridSearchCV(estimator=xgb1, param_grid = param_test5,
-                                scoring='neg_mean_absolute_error', cv=5)
-        gsearch5.fit(attack_train_eval_x, attack_train_eval_y)
-        logger.info(f"best parameter: {gsearch5.best_params_}")
-        logger.info(f"best score: {gsearch5.best_score_}")
+            xgb1.set_params(subsample=gsearch4.best_params_['subsample'],
+                            colsample_bytree=gsearch4.best_params_['colsample_bytree'])
+        if args.reg_alpha_vector:
+            param_test5 = {
+                'reg_alpha': args.reg_alpha_vector
+            }
+            gsearch5 = GridSearchCV(estimator=xgb1, param_grid = param_test5,
+                                    scoring='neg_mean_absolute_error', cv=5)
+            gsearch5.fit(attack_train_eval_x, attack_train_eval_y)
+            logger.info(f"best parameter: {gsearch5.best_params_}")
+            logger.info(f"best score: {gsearch5.best_score_}")
 
-        xgb1.set_params(n_estimators=args.xgb_n_rounds, reg_alpha=gsearch5.best_params_['reg_alpha'])
-        modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
+            xgb1.set_params(reg_alpha=gsearch5.best_params_['reg_alpha'])
+
+        xgb1.set_params(n_estimators=args.xgb_n_rounds)
+        # modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
 
     classifier_train_data = xgb.DMatrix(attack_train_data_x, attack_train_data_y)
     classifier_eval_data = xgb.DMatrix(attack_eval_data_x, attack_eval_data_y)
