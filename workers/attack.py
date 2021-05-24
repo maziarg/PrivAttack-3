@@ -695,7 +695,7 @@ def modelfit(alg, attack_train_eval_x, attack_train_eval_y, useTrainCV=True, cv_
         xgb_param = alg.get_xgb_params()
         xgtrain = xgb.DMatrix(attack_train_eval_x, label=attack_train_eval_y)
         cvresult = xgb.cv(xgb_param, xgtrain, num_boost_round=alg.get_params()['n_estimators'], nfold=cv_folds,
-                          metrics={'mae'}, early_stopping_rounds=early_stopping_rounds, verbose_eval=True)
+                          metrics={'mae'}, early_stopping_rounds=early_stopping_rounds, verbose_eval=False)
         alg.set_params(n_estimators=cvresult.shape[0])
 
     # Fit the algorithm on the data
@@ -1133,7 +1133,6 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
     np.save(pair_path_results + '/eval_x', attack_eval_data_x)
     np.save(pair_path_results + '/eval_y', attack_eval_data_y)
     logger.info("saving eval data for classifier training ... Done")
-
 
     # This part is in parallel with the above few lines WRT getting the data to be fed into XGBoost DMatrix
     # comment out if needed!
