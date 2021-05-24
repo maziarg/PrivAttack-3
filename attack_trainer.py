@@ -71,6 +71,7 @@ if __name__ == "__main__":
     parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
 
     # xgboost initial parameter values or fixed parameter values in the case which we do not want to tune the parameters
+    parser.add_argument('--early_stopping_rounds', default=10, type=int, help="xgboost early stopping rounds")
     parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
     parser.add_argument('--xg_eta', default=0.2, type=float, help="xgboost learning rate")
     parser.add_argument('--xgb_n_rounds', default=1000, type=int, help="xgboost maximum n_estimators")

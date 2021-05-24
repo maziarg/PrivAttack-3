@@ -724,7 +724,7 @@ def modelfit(alg, attack_train_eval_x, attack_train_eval_y, useTrainCV=True, cv_
     # # plt.show()
 
 
-def train_classifier(xgb1, xgb_train, xgb_eval, max_depth=20, num_round=1000, eta=0.2):
+def train_classifier(xgb1, xgb_train, xgb_eval, early_stopping_rounds=10, num_round=1000, eta=0.2):
 
     param = {'learning_rate': xgb1.get_params()['learning_rate'],
              'n_estimators': num_round,
@@ -744,7 +744,7 @@ def train_classifier(xgb1, xgb_train, xgb_eval, max_depth=20, num_round=1000, et
     evals_result = {}
     logger.info("training classifier")
     callbacks = [log_eval(20, True)]
-    return xgb.train(param, xgb_train, num_round, watch_list, early_stopping_rounds=10,
+    return xgb.train(param, xgb_train, num_round, watch_list, early_stopping_rounds=early_stopping_rounds,
                      evals_result=evals_result, callbacks=callbacks)
 
 def log_eval(period=1, show_stdv=True):
@@ -820,7 +820,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
 
     if args.cv_tune_xgb:
 
-        modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
+        modelfit(xgb1, attack_train_eval_x, attack_train_eval_y, early_stopping_rounds=args.early_stopping_rounds)
 
         if args. max_depth_vector or args.min_child_weight_vector:
 
@@ -870,7 +870,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
                 (args.subsample_vector or args.colsample_bytree_vector or args.reg_alpha_vector):
 
             xgb1.set_params(n_estimators=args.xgb_n_rounds)
-            modelfit(xgb1, attack_train_eval_x, attack_train_eval_y)
+            modelfit(xgb1, attack_train_eval_x, attack_train_eval_y, early_stopping_rounds=args.early_stopping_rounds)
 
         if args.subsample_vector or args.colsample_bytree_vector:
             param_test4 = {
@@ -906,7 +906,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
 
     logger.info("classifier training ...")
     attack_classifier = train_classifier(xgb1, classifier_train_data, classifier_eval_data,
-                                         max_depth=xgb1.get_params()['max_depth'],
+                                         early_stopping_rounds=args.early_stopping_rounds,
                                          num_round=args.xgb_n_rounds, eta=args.xg_eta)
 
     logger.info("training finished ...")
