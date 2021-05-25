@@ -72,14 +72,14 @@ if __name__ == "__main__":
 
     # xgboost initial parameter values or fixed parameter values in the case which we do not want to tune the parameters
     parser.add_argument('--early_stopping_rounds', default=10, type=int, help="xgboost early stopping rounds")
-    parser.add_argument('--max_depth', default=20, type=int, help="xgboost maximum depth of the decision tree.")
-    parser.add_argument('--xg_eta', default=0.2, type=float, help="xgboost learning rate")
+    parser.add_argument('--max_depth', default=2, type=int, help="xgboost maximum depth of the decision tree.")
+    parser.add_argument('--xg_eta', default=0.1, type=float, help="xgboost learning rate")
     parser.add_argument('--xgb_n_rounds', default=1000, type=int, help="xgboost maximum n_estimators")
     parser.add_argument('--min_child_weight', default=1, type=int, help="xgboost min_child_weight")
     parser.add_argument('--gamma', default=0, type=float, help="xgboost gamma")
-    parser.add_argument('--subsample', default=0.6, type=float, help="xgboost subsample")
-    parser.add_argument('--colsample_bytree', default=0.6, type=float, help="xgboost colsample_bytree")
-    parser.add_argument('--reg_alpha', default=10, type=float, help="xgboost reg_alpha")
+    parser.add_argument('--subsample', default=0.8, type=float, help="xgboost subsample")
+    parser.add_argument('--colsample_bytree', default=0.8, type=float, help="xgboost colsample_bytree")
+    parser.add_argument('--reg_alpha', default=0, type=float, help="xgboost reg_alpha")
 
     # xgboost hyper parameter tuning (Leave any parameter that doesn't need to be tuned empty)
     parser.add_argument("--cv_tune_xgb", action="store_true")  # If true, it tunes the xgb hyper parameters

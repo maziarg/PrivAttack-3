@@ -695,11 +695,11 @@ def modelfit(alg, attack_train_eval_x, attack_train_eval_y, useTrainCV=True, cv_
         xgb_param = alg.get_xgb_params()
         xgtrain = xgb.DMatrix(attack_train_eval_x, label=attack_train_eval_y)
         cvresult = xgb.cv(xgb_param, xgtrain, num_boost_round=alg.get_params()['n_estimators'], nfold=cv_folds,
-                          metrics={'auc'}, early_stopping_rounds=early_stopping_rounds, verbose_eval=False)
+                          metrics={'mae'}, early_stopping_rounds=early_stopping_rounds, verbose_eval=False)
         alg.set_params(n_estimators=cvresult.shape[0])
 
     # Fit the algorithm on the data
-    alg.fit(attack_train_eval_x, attack_train_eval_y, eval_metric='auc')
+    alg.fit(attack_train_eval_x, attack_train_eval_y, eval_metric='mae')
 
     # Predict training set:
     dtrain_predictions = alg.predict(attack_train_eval_x)
@@ -737,7 +737,7 @@ def train_classifier(xgb1, xgb_train, xgb_eval, early_stopping_rounds=10, num_ro
              'nthread': 4,
              'scale_pos_weight': 1,
              'seed': 27,
-             'eval_metric': 'auc',
+             'eval_metric': 'mae',
              'n_jobs': -1}
 
     watch_list = [(xgb_train, 'train'), (xgb_eval, 'eval')]
