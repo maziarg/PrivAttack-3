@@ -69,4 +69,3 @@ class ReplayBuffer(object):
         self.trajectory_end_index[:self.num_trajectories] = np.load(f"{save_folder}_trajectory_end_index.npy")
         self.initial_state[:self.num_trajectories] = np.load(f"{save_folder}_initial_state.npy")
 
-

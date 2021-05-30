@@ -24,11 +24,7 @@ def run_experiment_v2(environment, seeds, threshold, attack_training_size, num_p
 
 
 def run_experiments_v2(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args):
-    # experiment = [args.attack_sizes, args.attack_thresholds]
-    # product_res = product(*experiment)
-    # results = []
-    # for (attack_size, attack_threshold) in product_res:
-    # accuracy_bl, precision_bl, recall_bl, rmse, accuracy, precision, recall = \
+
     train_attack_model_v3(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args)
 
     # results.append(

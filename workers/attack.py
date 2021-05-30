@@ -76,8 +76,10 @@ def pad_traj(traj, padd_len):
     """adds padding to a trajectory"""
     if not isinstance(traj, np.ndarray):
         raise Exception("Failed to padd the trajectory: Wrong trajectory type")
-    padding_element = np.asarray(traj[-1]).repeat(int(padd_len) - traj.size)
-    test_seq = np.concatenate((traj, padding_element))
+    # last = np.array([traj[-1]])
+    # padding_element = np.tile(last, (int(padd_len) - traj.shape[0], 1))
+    padding_element = np.tile(np.zeros((1, traj.shape[1])), (int(padd_len) - traj.shape[0], 1))
+    test_seq = np.vstack([traj, padding_element])
     return test_seq
 
 
@@ -143,7 +145,7 @@ def get_buffer_properties(buffer_name, attack_path, state_dim, action_dim, devic
     """Loads buffers and returns some buffer properties"""
     logger.info("Retreiving buffer properties...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"{attack_path}/{seed}/{args.max_traj_len}/buffers/{buffer_name}")
+    replay_buffer_train.load(f"{attack_path}/{args.env_seed}/{seed}/{args.max_traj_len}/buffers/{buffer_name}")
 
     num_trajectories = replay_buffer_train.num_trajectories
     start_states = replay_buffer_train.initial_state
@@ -154,179 +156,149 @@ def get_buffer_properties(buffer_name, attack_path, state_dim, action_dim, devic
 
 def create_pairs(
     attack_path, state_dim, action_dim, device, args, label, train_seed, test_seed,
-    do_train=True, train_padding_len=0, test_padding_len=0):
+    do_train=True, train_padding_len=0, test_padding_len=0, padding_len=0):
 
     # Getting training buffer properties
-    buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
+    buffer_name_train = f"{args.buffer_name}_{args.env}_{args.env_seed}_{train_seed}"
     train_num_trajectories, train_start_states, train_trajectories_end_index = get_buffer_properties(
         buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
 
     # BCQ output
-    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}_{args.bcq_max_timesteps}"
+    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{args.env_seed}_{test_seed}_{args.bcq_max_timesteps}_compatible"
     test_num_trajectories, test_start_states, test_trajectories_end_index = get_buffer_properties(
-        buffer_name_test , attack_path, state_dim, action_dim, device, args, test_seed)
+        buffer_name_test, attack_path, state_dim, action_dim, device, args, test_seed)
 
-    # Bounding the number of test trajectories
-    if args.out_traj_size < test_num_trajectories:
-        test_num_trajectories = args.out_traj_size
-
-    if args.in_traj_size < train_num_trajectories:
-        train_num_trajectories = args.in_traj_size
+    if train_num_trajectories != test_num_trajectories and train_seed == test_seed:
+        raise ValueError('"in" and "out" buffers do not have same number of trajectories ... ')
+    if not np.array_equal(train_start_states, test_start_states) and train_seed == test_seed:
+        raise ValueError('the initial states are not the same in the "in" and "out" buffers with same seeds')
+    if not np.array_equal(train_start_states[0:10], test_start_states[0:10]):
+        raise ValueError('the initial states are not the same in the "in" and "out" buffers')
 
     if do_train:
-        train_num_trajectories = train_num_trajectories / np.sqrt(args.num_models)
-        test_num_trajectories = test_num_trajectories / np.sqrt(args.num_models)
+        num_trajectories = min(train_num_trajectories, test_num_trajectories) / args.num_models
         # Choosing 80% of input trajectories for training and the rest for evaluation
-        train_size = int(round(train_num_trajectories * 0.80))
-        eval_train_size = int(round(train_num_trajectories - train_size))
+        train_size = int(round(num_trajectories * 0.80))
+        # eval_train_size = int(round(num_trajectories - train_size))
 
-        # Choosing 80% of output trajectories for training and the rest for evaluation
-        test_size = int(round(test_num_trajectories * 0.80))
-        eval_test_size = int(round(test_num_trajectories - test_size))
     else:
 
-        train_size = math.floor(train_num_trajectories * args.ratio_size_prediction)
-        eval_train_size = 0
+        num_trajectories = train_size = min(args.attack_sizes[0], train_num_trajectories, test_num_trajectories)
+        # eval_train_size = 0
 
-        test_size = math.floor(test_num_trajectories * args.ratio_size_prediction)
-        eval_test_size = 0
+    test_seq_buffer = np.load(
+        f"{attack_path}/{args.env_seed}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy")
+    train_seq_buffer = np.load(
+        f"{attack_path}/{args.env_seed}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy")
 
-
-
-    # Loading test/train action buffers
-    test_seq_buffer = np.ravel(np.load(
-        f"{attack_path}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy"))
-    train_seq_buffer = np.ravel(np.load(
-        f"{attack_path}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy"))
-
-    if CORRELATION_MAP.get(args.correlation) == DECORRELATED and do_train:
-        return generate_decorrelated_train_eval_pairs(
-                test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_start_states, test_start_states,
-                test_padding_len, test_size, train_size, eval_test_size, eval_train_size,
-            args.max_traj_len, label, do_train=do_train)
-    else:
-        return generate_correlated_train_eval_pairs(
-                test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index,
-                test_size, train_size, eval_test_size, eval_train_size, test_padding_len, train_padding_len,
-                train_start_states, test_start_states, label, do_train=do_train, correlation=args.correlation
-        )
-
-
-def generate_correlated_train_eval_pairs(
-    test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index, test_size, train_size,
-    eval_test_size, eval_train_size, test_padding_len, train_padding_len, train_start_states, test_start_states,
-    label, do_train=True, correlation=CORRELATED):
-    """Generating correlated train/eval pairs. It randomly selects trajectories from test and train datasets and pairs them"""
-    test_traj_indecies, test_eval_indicies = get_random_seqs(
-        len(test_trajectories_end_index), test_size, eval_test_size)
-    train_traj_indecies, train_eval_indicies = get_random_seqs(
-        len(train_trajectories_end_index), train_size, eval_train_size)
-
-    # if not do_train:
-    #     test_traj_indecies = np.append(test_traj_indecies, test_eval_indicies)
-    #     train_traj_indecies = np.append(train_traj_indecies, train_eval_indicies)
-
-    final_train_dataset = generate_correlated_pairs(
-        test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index,
-        test_traj_indecies, train_traj_indecies,
-        test_padding_len, train_padding_len, train_start_states, test_start_states, label, do_train, correlation=correlation)
-
-    # when creating test pairs, we don't have evaluation part
-    final_eval_dataset = None
-    if do_train:
-        final_eval_dataset = generate_correlated_pairs(
-            test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index,
-            test_eval_indicies, train_eval_indicies,
-            test_padding_len, train_padding_len, train_start_states, test_start_states, label, do_train, correlation=correlation)
+    final_train_dataset, final_eval_dataset = generate_correlated_decorrelated_pairs(
+        test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index, train_size,
+        num_trajectories, train_start_states, label, do_train, correlation=args.correlation,
+        test_padding_len=test_padding_len, train_padding_len=train_padding_len,
+        padding_len=padding_len, pairing_mode=args.pairing_mode)
 
     return final_train_dataset, final_eval_dataset
 
+
 def generate_correlated_pairs(
-    test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index,
-    test_traj_indecies, train_traj_indecies,
-    test_padding_len, train_padding_len, train_start_states, test_start_states, label, do_train, correlation=CORRELATED):
+    test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index, train_size,
+        num_trajectories, train_start_states, label, do_train, correlation=CORRELATED, test_padding_len=None,
+        train_padding_len=None, padding_len=None, pairing_mode='horizontal'):
     """Pairing test and train pairs"""
     final_train_dataset = None
     final_train_dataset_label = None
+    final_eval_dataset = None
+    final_eval_dataset_label = None
+
     if do_train:
         logger.info(f"generating {CORRELATION_MAP.get(correlation)} pairs...")
     else:
         logger.info(f"generating correlated pairs for prediction...")
     # Pairing the entire training with test in the broadcast fashion
-    for j in test_traj_indecies:
-        # Pairing the entire train set with the j-th test trajectory
-        if j == 0:
-            # from 0 to the end index inclusive
-            test_seq = test_seq_buffer[0:test_trajectories_end_index[j] + 1: 1]
-        else:
-            # test_trajectories_end_index[j - 1] is part of the (j - 1)'s trajectory!
-            test_seq = test_seq_buffer[test_trajectories_end_index[j - 1] + 1: test_trajectories_end_index[j] + 1: 1]
-        # Padding test trajectories till the maximum length trajectory achieves
-        # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
-        # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
-        test_seq = pad_traj(test_seq, test_padding_len)
-        for i in train_traj_indecies:
-            # TODO seems like start states are of type ndarray, add checks if it was not the case later on.
-            start_seq = np.concatenate((np.asarray(train_start_states[i]), np.asarray(test_start_states[j])))
-            if i == 0:
-                # from 0 to end index inclusive
-                train_seq = train_seq_buffer[0:train_trajectories_end_index[i] + 1: 1]
+    for j in range(int(num_trajectories)):
+
+        if do_train and j >= train_size:
+            if pairing_mode == 'horizontal':
+                eval_in_seq = pad_traj(
+                    train_seq_buffer[train_trajectories_end_index[j-1] + 1: train_trajectories_end_index[j] + 1, :],
+                    train_padding_len)
+                eval_out_seq = pad_traj(
+                    test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                    test_padding_len)
+            elif pairing_mode == 'vertical':
+                eval_in_seq = pad_traj(
+                    train_seq_buffer[train_trajectories_end_index[j-1] + 1: train_trajectories_end_index[j] + 1, :],
+                    padding_len)
+                eval_out_seq = pad_traj(
+                    test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                    padding_len)
             else:
-                # from i - 1 to i inclusive
-                train_seq = train_seq_buffer[train_trajectories_end_index[i - 1] + 1: train_trajectories_end_index[i] + 1: 1]
-            # Padding train trajectories
-            train_seq = pad_traj(train_seq, train_padding_len)
-            # Putting start seq, train and test trajectories together
-            # For Semi correlated pairs, we shuffle train and test trajectories in place
-            if CORRELATION_MAP.get(correlation) == SEMI_CORRELATED and do_train:
-                np.random.shuffle(train_seq)
-                # np.random.shuffle(test_seq)
-            complete_traj_seq = np.concatenate((start_seq, train_seq, test_seq))
-            # saving labels as a separate ndarray
+                raise NotImplementedError
+            if CORRELATION_MAP.get(correlation) == SEMI_CORRELATED:
+                np.random.shuffle(eval_in_seq)
+            if pairing_mode == 'horizontal':
+                complete_traj_eval_seq = np.concatenate((eval_in_seq, eval_out_seq))
+                complete_traj_eval_seq = np.ravel(complete_traj_eval_seq)
+            else:
+                complete_traj_eval_seq = np.concatenate((eval_in_seq, eval_out_seq), axis=1)
+                complete_traj_eval_seq = np.ravel(complete_traj_eval_seq)
+
+            final_eval_dataset_label = np.array([label]) if not isinstance(
+                final_eval_dataset_label, np.ndarray) else np.vstack((final_eval_dataset_label, np.array([label])))
+            final_eval_dataset = complete_traj_eval_seq if not isinstance(
+                final_eval_dataset, np.ndarray) else np.vstack((final_eval_dataset, complete_traj_eval_seq))
+
+        else:
+            if pairing_mode == 'horizontal':
+                if j == 0:
+                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :], train_padding_len)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], test_padding_len)
+                else:
+                    in_seq = pad_traj(
+                        train_seq_buffer[train_trajectories_end_index[j-1] + 1: train_trajectories_end_index[j] + 1, :],
+                        train_padding_len)
+                    out_seq = pad_traj(
+                        test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                        test_padding_len)
+            elif pairing_mode == 'vertical':
+                if j == 0:
+                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :], padding_len)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], padding_len)
+                else:
+                    in_seq = pad_traj(
+                        train_seq_buffer[train_trajectories_end_index[j-1] + 1: train_trajectories_end_index[j] + 1, :],
+                        padding_len)
+                    out_seq = pad_traj(
+                        test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                        padding_len)
+            else:
+                raise ValueError('No padding length defined!')
+            if CORRELATION_MAP.get(correlation) == SEMI_CORRELATED:
+                np.random.shuffle(in_seq)
+            if pairing_mode == 'horizontal':
+                complete_traj_seq = np.concatenate((in_seq, out_seq))
+                complete_traj_seq = np.ravel(complete_traj_seq)
+            else:
+                complete_traj_seq = np.concatenate((in_seq, out_seq), axis=1)
+                complete_traj_seq = np.ravel(complete_traj_seq)
+
             final_train_dataset_label = np.array([label]) if not isinstance(
                 final_train_dataset_label, np.ndarray) else np.vstack((final_train_dataset_label, np.array([label])))
-
-            # TODO: for now, we are both saving the arrays in a file on disk. This is in parallel with returning the result
-            # TODO: After measuring the performance, just use one of the methods!
-            # with open(f"./{attack_path}/{seed}/attack_outputs/traj_based_buffers/train_{args.out_traj_size}.npy", 'ab')\
-            #         as f:
-            #     # Concatenating the label to the trajectories here since this is a parallel transfer of data,
-            #     # then save the file
-            #     np.save(f, np.concatenate((complete_traj_seq, np.array([label]))))
-
-            # vertically stack the trajectories to be fed into xgboost or anothe classifier
             final_train_dataset = complete_traj_seq if not isinstance(
                 final_train_dataset, np.ndarray) else np.vstack((final_train_dataset, complete_traj_seq))
+
     if do_train:
         logger.info(f"generating {CORRELATION_MAP.get(correlation)} pairs... Done!")
     else:
         logger.info("generating correlated pairs for prediction... Done!")
-    # print(f"generating correlated pairs...DONE!")
-    # we return a tuple of trajectories and lables. XGBoost needs a matrix of data and label
-    return (final_train_dataset, final_train_dataset_label)
+
+    return (final_train_dataset, final_train_dataset_label), (final_eval_dataset, final_eval_dataset_label)
 
 
-def generate_decorrelated_train_eval_pairs(
-    test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_start_states, test_start_states,
-    test_padding_len, test_size, train_size, eval_test_size, eval_train_size, max_traj_len, label, do_train=True):
-    """Generating decorrelated train/eval pairs"""
-    test_traj_indecies, test_eval_indicies = get_random_seqs(
-        len(test_trajectories_end_index), test_size, eval_test_size)
-    final_train_dataset = generate_decorrelated_pairs(
-        test_seq_buffer, train_seq_buffer, test_trajectories_end_index, test_traj_indecies, test_padding_len,
-        train_start_states, test_start_states, test_size, train_size, max_traj_len, label)
-
-    final_eval_dataset = None
-    if do_train:
-        final_eval_dataset = generate_decorrelated_pairs(
-            test_seq_buffer, train_seq_buffer, test_trajectories_end_index, test_eval_indicies, test_padding_len,
-            train_start_states, test_start_states, eval_test_size, eval_train_size, max_traj_len, label)
-    return final_train_dataset, final_eval_dataset
-
-
-def generate_decorrelated_pairs(
-    test_seq_buffer, train_seq_buffer, test_trajectories_end_index, test_traj_indecies, test_padding_len,
-        train_start_states, test_start_states, test_size, train_size, max_traj_len, label):
+def generate_correlated_decorrelated_pairs(
+        test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index, train_size,
+        num_trajectories, train_start_states, label, do_train, correlation=CORRELATED, test_padding_len=None,
+        train_padding_len=None, padding_len=None, pairing_mode='horizontal'):
     """
     Randomly selects start states, action train/test_seq_buffer, and label
     A trajectory length is set using args.max_traj_len. This value should be the length of the entire
@@ -334,159 +306,115 @@ def generate_decorrelated_pairs(
     """
     final_train_dataset = None
     final_train_dataset_label = None
-    logger.info("generating decorrelated pairs...")
-    train_traj_len = max_traj_len
-    for j in test_traj_indecies:
-        # Pairing the entire train set with the j-th test trajectory
-        if j == 0:
-            # from 0 to the end index inclusive
-            test_seq = test_seq_buffer[0:test_trajectories_end_index[j] + 1: 1]
+    final_eval_dataset = None
+    final_eval_dataset_label = None
+
+    if do_train:
+        logger.info(f"generating {CORRELATION_MAP.get(correlation)} pairs... ")
+    else:
+        logger.info("generating CORRELATED pairs for prediction... ")
+
+    for j in range(int(num_trajectories)):
+
+        if do_train and j >= train_size:
+            if pairing_mode == 'horizontal':
+                if correlation == 'DECORRELATED':
+                    eval_in_seq = train_seq_buffer[np.random.choice(
+                        train_seq_buffer.shape[0], train_padding_len, replace=True), :]
+                else:
+                    eval_in_seq = pad_traj(
+                        train_seq_buffer[train_trajectories_end_index[j - 1] + 1:
+                                         train_trajectories_end_index[j] + 1, :], train_padding_len)
+                eval_out_seq = pad_traj(
+                    test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                    test_padding_len)
+            elif pairing_mode == 'vertical':
+                if correlation == 'DECORRELATED':
+                    eval_in_seq = train_seq_buffer[np.random.choice(
+                        train_seq_buffer.shape[0], padding_len, replace=True), :]
+                else:
+                    eval_in_seq = pad_traj(
+                        train_seq_buffer[train_trajectories_end_index[j - 1] + 1:
+                                         train_trajectories_end_index[j] + 1, :], padding_len)
+                eval_out_seq = pad_traj(
+                    test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                    padding_len)
+            else:
+                raise NotImplementedError
+            if CORRELATION_MAP.get(correlation) == 'SEMI_CORRELATED':
+                np.random.shuffle(eval_in_seq)
+            if pairing_mode == 'horizontal':
+                complete_traj_eval_seq = np.concatenate((eval_in_seq, eval_out_seq))
+                complete_traj_eval_seq = np.ravel(complete_traj_eval_seq)
+            else:
+                complete_traj_eval_seq = np.concatenate((eval_in_seq, eval_out_seq), axis=1)
+                complete_traj_eval_seq = np.ravel(complete_traj_eval_seq)
+
+            final_eval_dataset_label = np.array([label]) if not isinstance(
+                final_eval_dataset_label, np.ndarray) else np.vstack((final_eval_dataset_label, np.array([label])))
+            final_eval_dataset = complete_traj_eval_seq if not isinstance(
+                final_eval_dataset, np.ndarray) else np.vstack((final_eval_dataset, complete_traj_eval_seq))
+
         else:
-            # test_trajectories_end_index[j - 1] is part of the (j - 1)'s trajectory!
-            test_seq = test_seq_buffer[test_trajectories_end_index[j - 1] + 1: test_trajectories_end_index[j] + 1: 1]
-        # Padding test trajectories till the maximum length trajectory achieves
-        # TODO: Note that the maximum trajectory length would not be padded! Would it confuse xgboost or other classifiers?
-        # TODO: should we choose a good enough maximum length to which ALL trajectories would be padded?
-        test_seq = pad_traj(test_seq, test_padding_len)
-    # for j in range(test_size):
-    #     # Test seq
-    #     test_seq = RAND_SELEC_FUNC_REPLACE_TRUE(test_seq_buffer, traj_len)
-        for i in range(train_size):
-            # Start seq, randomly selecting one start state for each test and train
-            # start_seq = np.concatenate(
-            #     (
-            #         np.asarray(train_start_states[np.asscalar(RAND_SELEC_FUNC_REPLACE_TRUE(range(train_size), 1))]),
-            #         np.asarray(test_start_states[np.asscalar(RAND_SELEC_FUNC_REPLACE_TRUE(range(test_size), 1))])
-            #     ))
-            start_seq = np.concatenate(
-                (
-                    np.asarray(train_start_states[np.asscalar(RAND_SELEC_FUNC_REPLACE_TRUE(range(train_size), 1))]),
-                    np.asarray(test_start_states[j])
-                ))
-            # Train seq
-            train_seq = RAND_SELEC_FUNC_REPLACE_TRUE(train_seq_buffer, train_traj_len)
-            # Putting start seq, train and test trajectories together
-            complete_traj_seq = np.concatenate((start_seq, train_seq, test_seq))
-            # saving labels as a separate ndarray
+            if pairing_mode == 'horizontal':
+                if j == 0 and CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
+                    in_seq = train_seq_buffer[np.random.choice(
+                        train_seq_buffer.shape[0], train_padding_len, replace=True), :]
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], test_padding_len)
+                elif j == 0:
+                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :], train_padding_len)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], test_padding_len)
+                else:
+                    if CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
+                        in_seq = train_seq_buffer[np.random.choice(
+                            train_seq_buffer.shape[0], train_padding_len, replace=True), :]
+                    else:
+                        in_seq = pad_traj(
+                            train_seq_buffer[train_trajectories_end_index[j - 1] + 1:
+                                             train_trajectories_end_index[j] + 1, :], train_padding_len)
+                    out_seq = pad_traj(
+                        test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                        test_padding_len)
+            elif pairing_mode == 'vertical':
+                if j == 0 and CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
+                    in_seq = train_seq_buffer[np.random.choice(
+                        train_seq_buffer.shape[0], padding_len, replace=True), :]
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], padding_len)
+                elif j == 0:
+                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :], padding_len)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], padding_len)
+                else:
+                    if CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
+                        in_seq = train_seq_buffer[np.random.choice(
+                            train_seq_buffer.shape[0], padding_len, replace=True), :]
+                    else:
+                        in_seq = pad_traj(
+                            train_seq_buffer[train_trajectories_end_index[j-1] + 1: train_trajectories_end_index[j] + 1, :],
+                            padding_len)
+                    out_seq = pad_traj(
+                        test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
+                        padding_len)
+            else:
+                raise ValueError('No padding length defined!')
+            if CORRELATION_MAP.get(correlation) == 'SEMI_CORRELATED' and do_train:
+                np.random.shuffle(in_seq)
+            if pairing_mode == 'horizontal':
+                complete_traj_seq = np.concatenate((in_seq, out_seq))
+                complete_traj_seq = np.ravel(complete_traj_seq)
+            else:
+                complete_traj_seq = np.concatenate((in_seq, out_seq), axis=1)
+                complete_traj_seq = np.ravel(complete_traj_seq)
+
             final_train_dataset_label = np.array([label]) if not isinstance(
                 final_train_dataset_label, np.ndarray) else np.vstack((final_train_dataset_label, np.array([label])))
-
-            # vertically stack the trajectories to be fed into xgboost or anothe classifier
             final_train_dataset = complete_traj_seq if not isinstance(
                 final_train_dataset, np.ndarray) else np.vstack((final_train_dataset, complete_traj_seq))
 
-    logger.info("generating decorrelated pairs...DONE!")
-    # we return a tuple of trajectories and lables. XGBoost needs a matrix of data and label
-    return (final_train_dataset, final_train_dataset_label)
-
-
-def create_sets(seeds, attack_training_size, timesteps, trajectory_length, num_predictions, dimension):
-    path = "tmp_plks/"
-    if not os.path.exists(path):
-        os.mkdir(path)
-
-    train_size = math.floor(attack_training_size / (10 / 8))
-    eval_size = math.floor(attack_training_size / (10 / 2))
-    num_traj_per_model = int(timesteps / trajectory_length)
-    total_pairs_needed = attack_training_size + num_predictions
-    data_length = 2 * (trajectory_length * dimension)
-
-    data_train = np.empty([0, data_length])
-    data_eval = np.empty([0, data_length])
-    labels_train = np.empty(train_size, dtype=int)
-    labels_eval = np.empty(eval_size, dtype=int)
-    data_test = np.empty([0, data_length])
-    labels_test = []
-    # train and test pair inedcies
-    train_pairs, test_pairs = generate_pairs(total_pairs_needed, len(seeds) * num_traj_per_model, num_predictions,
-                                             attack_training_size)
-
-    d_test = str(uuid.uuid4())
-    d_t = str(uuid.uuid4())
-    l_t = str(uuid.uuid4())
-    d_e = str(uuid.uuid4())
-    l_e = str(uuid.uuid4())
-
-    # save test pairs
-    indx = 0
-    for x_i, y_i in test_pairs:
-        x_model, y_model, same_set, index_x, index_y = get_models(x_i, y_i, num_traj_per_model)
-        seed_x = seeds[x_model]
-        seed_y = seeds[y_model]
-        data_test = np.insert(data_test, indx,
-                              np.concatenate((get_trajectory(seed_x, index_x, trajectory_length),
-                                              get_trajectory_test(seed_y, index_y, trajectory_length))), axis=0)
-
-        if same_set:
-            labels_test.append(1)
-        else:
-            labels_test.append(0)
-
-        indx += 1
-
-    np.save(path + d_test + '.npy', data_test)
-
-    del test_pairs, data_test
-    gc.collect()
-    logger.info("saved test pairs")
-
-    # save train pairs
-    indx = 0
-    for x_i, y_i in train_pairs:
-        if indx < train_size:
-            x_model, y_model, same_set, index_x, index_y = get_models(x_i, y_i, num_traj_per_model)
-            seed_x = seeds[x_model - 1]
-            seed_y = seeds[y_model - 1]
-            data_train = np.insert(data_train, indx, np.concatenate(
-                (get_trajectory(seed_x, index_x, trajectory_length),
-                 get_trajectory_test(seed_y, index_y, trajectory_length))),
-                                   axis=0)
-
-            if same_set:
-                labels_train.put(indx, 1)
-            else:
-                labels_train.put(indx, 0)
-
-        else:
-            break
-
-        indx += 1
-
-    np.save(path + d_t + '.npy', data_train)
-    np.save(path + l_t + '.npy', labels_train)
-
-    del data_train, labels_train
-    gc.collect()
-    logger.info("saved train pairs")
-
-    # save eval pairs
-    insrt = 0
-    while indx < attack_training_size:
-        x_i, y_i = train_pairs[indx]
-        x_model, y_model, same_set, index_x, index_y = get_models(x_i, y_i, num_traj_per_model)
-        seed_x = seeds[x_model - 1]
-        seed_y = seeds[y_model - 1]
-        data_eval = np.insert(data_eval, insrt, np.concatenate(
-            (get_trajectory(seed_x, index_x, trajectory_length),
-             get_trajectory_test(seed_y, index_y, trajectory_length))),
-                              axis=0)
-
-        if same_set:
-            labels_eval.put(insrt, 1)
-        else:
-            labels_eval.put(insrt, 0)
-
-        indx += 1
-        insrt += 1
-
-    np.save(path + d_e + '.npy', data_eval)
-    np.save(path + l_e + '.npy', labels_eval)
-
-    del data_eval, labels_eval
-    gc.collect()
-    logger.info("saved eval pairs")
-
-    return d_t, l_t, d_e, l_e, d_test, labels_test
+    if do_train:
+        logger.info(f"generating {CORRELATION_MAP.get(correlation)} pairs... Done!")
+    else:
+        logger.info("generating CORRELATED pairs for prediction... Done!")
+    return (final_train_dataset, final_train_dataset_label), (final_eval_dataset, final_eval_dataset_label)
 
 
 def logger_exp(baseline, precision_bl, recall_bl, rmse, accuracy, precision, recall, threshold):
@@ -937,65 +865,6 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     logger.info(results)
 
 
-def train_attack_model_v2(environment, threshold, trajectory_length, seeds, attack_model_size, test_size, timesteps,
-                          dimension):
-    path = "tmp_plks/"
-    d_t, l_t, d_e, l_e, d_test, labels_test = create_sets(seeds, attack_model_size, timesteps, trajectory_length,
-                                                          test_size, dimension)
-
-    # xgb_t, xgb_e, xgb_test = create_xgb_train_test_eval(d_t, l_t, d_e, l_e, d_test)
-    attack_classifier = train_classifier(xgb.DMatrix(np.load(path + d_t + '.npy'), label=np.load(path + l_t + '.npy')),
-                                         xgb.DMatrix(np.load(path + d_e + '.npy'), label=np.load(path + l_e + '.npy')))
-
-    logger.info("training finished --> generating predictions")
-    xgb_testing = xgb.DMatrix(np.load(path + d_test + '.npy'))
-    classifier_predictions = attack_classifier.predict(xgb_testing)
-
-    cleanup([d_t, l_t, d_e, l_e, d_test], ["1"])
-
-    print_experiment(environment, len(seeds), threshold, trajectory_length,
-                     attack_model_size)
-
-    return generate_metrics(classifier_predictions, labels_test, threshold, test_size)
-
-
-# def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim, device, args):
-#     """
-#     Let's get the maximum length for both positive/negative test/train trajectories.
-#     This is done for padding purposes.
-#     """
-#     logger.info("getting maximum trajectories length...")
-#     train_traj_lens = []
-#     test_traj_lens = []
-#     train_test_seeds = []
-#     max_train_traj_len = []
-#     for label in [0, 1]:
-#         train_test_seeds.append(get_seeds_train_pairs(label, args.seed))
-#         train_test_seeds.append(get_seeds_test_pairs(label, args.seed))
-#
-#     for train_seed, test_seed in train_test_seeds:
-#         if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
-#             # loading buffers to get trajectories lengths
-#             buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
-#             _, _, train_trajectories_end_index = get_buffer_properties(
-#                 buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
-#
-#             # Maximum trajectory length is calculated for padding purposes
-#             train_traj_lens.append(compute_max_trajectory_length(train_trajectories_end_index))
-#             max_train_traj_len = max(train_traj_lens)
-#
-#         # BCQ output
-#         buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}_{args.bcq_max_timesteps}"
-#         _, _, test_trajectories_end_index = get_buffer_properties(
-#             buffer_name_test, attack_path, state_dim, action_dim, device, args, test_seed)
-#
-#         # Maximum trajectory length is calculated for padding purposes
-#         test_traj_lens.append(compute_max_trajectory_length(test_trajectories_end_index))
-#         max_test_traj_len = max(test_traj_lens)
-#
-#     return max_test_traj_len, max_train_traj_len
-
-
 def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim, device, args):
     """
     Let's get the maximum length for both positive/negative test/train trajectories.
@@ -1005,34 +874,34 @@ def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim
     train_traj_lens = []
     test_traj_lens = []
     train_test_seeds = []
-    max_train_traj_len = []
+    # max_train_traj_len = []
     for label in [0, 1]:
         for i in range(args.num_models):
             train_test_seeds.append(get_seeds_pairs(label, args.shadow_seeds, index=i, test=False))
         train_test_seeds.append(get_seeds_pairs(label, args.target_seeds, test=True))
 
     for train_seed, test_seed in train_test_seeds:
-        if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
+        # if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
             # loading buffers to get trajectories lengths
-            buffer_name_train = f"{args.buffer_name}_{args.env}_{train_seed}"
-            _, _, train_trajectories_end_index = get_buffer_properties(
-            buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
+        buffer_name_train = f"{args.buffer_name}_{args.env}_{args.env_seed}_{train_seed}"
+        _, _, train_trajectories_end_index = get_buffer_properties(
+        buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
 
-            # Maximum trajectory length is calculated for padding purposes
-            train_traj_lens.append(compute_max_trajectory_length(train_trajectories_end_index))
+        # Maximum trajectory length is calculated for padding purposes
+        train_traj_lens.append(compute_max_trajectory_length(train_trajectories_end_index))
 
         # BCQ output
-        buffer_name_test = f"target_{args.buffer_name}_{args.env}_{test_seed}_{args.bcq_max_timesteps}"
+        buffer_name_test = f"target_{args.buffer_name}_{args.env}_{args.env_seed}_{test_seed}_{args.bcq_max_timesteps}_compatible"
         _, _, test_trajectories_end_index = get_buffer_properties(
             buffer_name_test , attack_path, state_dim, action_dim, device, args, test_seed)
         
         # Maximum trajectory length is calculated for padding purposes
         test_traj_lens.append(compute_max_trajectory_length(test_trajectories_end_index))
 
-    if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
-        max_train_traj_len = max(train_traj_lens)
+    # if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
+    #     max_train_traj_len = max(train_traj_lens)
 
-    return max(test_traj_lens), max_train_traj_len
+    return max(test_traj_lens), max(train_traj_lens)
 
 
 def shuffle_xgboost_params(attack_train_data_x, attack_train_data_y):
@@ -1047,18 +916,12 @@ def shuffle_xgboost_params(attack_train_data_x, attack_train_data_y):
 
 def train_attack_model_v3(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args):
 
-    if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
-        # In correlated mode, we need to load existing trajectories, and find their maximum length
-        # test_padding_len = train_padding_len = args.max_traj_len
-        test_padding_len, train_padding_len = get_pairs_max_traj_len(
-            attack_path, file_path_results, state_dim, action_dim, device, args)
-    else:
-        # In decorrelated mode, we use the given max_traj_len as the maximum trajectory length of the train trajectory
-        train_padding_len = args.max_traj_len
-        test_padding_len, _ = get_pairs_max_traj_len(
-            attack_path, file_path_results, state_dim, action_dim, device, args)
-        # test_padding_len, train_padding_len = get_pairs_max_traj_len(
-        #     attack_path, state_dim, action_dim, device, args)
+    # if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
+    # In correlated mode, we need to load existing trajectories, and find their maximum length
+    # test_padding_len = train_padding_len = args.max_traj_len
+    test_padding_len, train_padding_len = get_pairs_max_traj_len(
+        attack_path, file_path_results, state_dim, action_dim, device, args)
+    padding_len = max(test_padding_len, train_padding_len)
     # Pairing train and test trajectories
     # Feeding max length trajectory to be uesd for padding purposes
     attack_train_pos_data = None
@@ -1077,7 +940,8 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
             train_seed, test_seed,
             do_train=True,
             test_padding_len=test_padding_len,
-            train_padding_len=train_padding_len
+            train_padding_len=train_padding_len,
+            padding_len=padding_len
         )
         train_pos_data, train_pos_label = attack_train_positive_data
         eval_pos_data, eval_pos_label = attack_eval_positive_data
@@ -1096,7 +960,8 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
             train_seed, test_seed,
             do_train=True,
             test_padding_len=test_padding_len,
-            train_padding_len=train_padding_len
+            train_padding_len=train_padding_len,
+            padding_len=padding_len
         )
         train_neg_data, train_neg_label = attack_train_negative_data
         eval_neg_data, eval_neg_label = attack_eval_negative_data
@@ -1134,26 +999,6 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
     np.save(pair_path_results + '/eval_y', attack_eval_data_y)
     logger.info("saving eval data for classifier training ... Done")
 
-    # This part is in parallel with the above few lines WRT getting the data to be fed into XGBoost DMatrix
-    # comment out if needed!
-    # x_input = None
-    # with open(f"./{attack_path}/{0}/attack_outputs/traj_based_buffers/eval_{args.out_traj_size}.npy", 'rb') as f:
-    #     fsz = os.fstat(f.fileno()).st_size
-    #     x_input = np.load(f)
-    #     while f.tell() < fsz:
-    #         x_input = np.vstack((x_input, np.load(f)))
-    # classifier_train_data = xgb.DMatrix(x_input, )  # Note that in this way, the label needs to be extracted from the arrays
-
-    # This part is in parallel with the above few lines WRT getting the data to be fed into XGBoost DMatrix
-    # comment out if needed!
-    # e_input = None
-    # with open(f"./{attack_path}/{0}/attack_outputs/traj_based_buffers/eval_{args.out_traj_size}.npy", 'rb') as f:
-    #     fsz = os.fstat(f.fileno()).st_size
-    #     e_input = np.load(f)
-    #     while f.tell() < fsz:
-    #         e_input = np.vstack((e_input, np.load(f)))
-    # classifier_eval_data = xgb.DMatrix(e_input) # Note that in this way, the label needs to be extracted from the arrays
-
     # Positive pairs
     train_seed, test_seed = get_seeds_pairs(1, args.target_seeds, test=True)
     attack_train_positive_data, _ = create_pairs(
@@ -1161,7 +1006,8 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
         train_seed, test_seed,
         do_train=False,
         test_padding_len=test_padding_len,
-        train_padding_len=train_padding_len
+        train_padding_len=train_padding_len,
+        padding_len=padding_len
     )
     # Negative pairs
     train_seed, test_seed = get_seeds_pairs(0, args.target_seeds, test=True)
@@ -1170,7 +1016,8 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
         train_seed, test_seed,
         do_train=False,
         test_padding_len=test_padding_len,
-        train_padding_len=train_padding_len
+        train_padding_len=train_padding_len,
+        padding_len=padding_len
     )
 
     final_train_dataset_pos, final_train_dataset_pos_label = attack_train_positive_data

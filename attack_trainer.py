@@ -30,6 +30,7 @@ if __name__ == "__main__":
                                                                     "for num_models > 2: "
                                                                     "the number of shadow_seeds = num_models") # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--target_seeds", nargs=2, type=int)
+    parser.add_argument("--env_seed", type=int)
     parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
 
     parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
@@ -69,6 +70,8 @@ if __name__ == "__main__":
     parser.add_argument('--max_traj_len', default=1000, type=int)
     parser.add_argument('--correlation', default='c', choices=["c", 'd', 's'], help="Activate semi/de/correlated mode.")
     parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
+    parser.add_argument('--pairing_mode', default='horizontal', choices=['horizontal', 'vertical'],
+                        help='the action sequences are paired either horizontally or vertically')
 
     # xgboost initial parameter values or fixed parameter values in the case which we do not want to tune the parameters
     parser.add_argument('--early_stopping_rounds', default=10, type=int, help="xgboost early stopping rounds")
@@ -127,9 +130,9 @@ if __name__ == "__main__":
     if not os.path.exists(file_path_results):
         os.makedirs(file_path_results)
 
-    pair_path_results = file_path_results + f"/pairs/train_NumModel_{args.num_models}_ShSeed_{args.shadow_seeds}_" \
-                                            f"TaSeed_{args.target_seeds}_in_{args.in_traj_size}_" \
-                                            f"out_{args.out_traj_size}_ratio_{args.ratio_size_prediction}"
+    pair_path_results = file_path_results + f"/pairs/{args.pairing_mode}/train_NumModel_{args.num_models}_" \
+                                            f"ShSeed_{args.shadow_seeds}_TaSeed_{args.target_seeds}_" \
+                                            f"EnvSeed_{args.env_seed}"
 
     if not os.path.exists(pair_path_results):
         os.makedirs(pair_path_results)
@@ -175,28 +178,3 @@ if __name__ == "__main__":
         experiment.run_experiments_v2(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args)
     else:
         experiment.run_classifier(attack_path, file_path_results, pair_path_results, state_dim, action_dim, device, args)
-
-
-    #training_iters = 0
-
-    # timestep_seeds = None
-    # dimension = 0
-    # print(args)
-    #
-    # if args.env == "HalfCheetah-v2":
-    #     dimension = 24
-    # if args.env == "Humanoid-v2":
-    #     dimension = 394
-    # if args.env == "Hopper-v2":
-    #     dimension = 15
-    #
-    # if args.fix_num_models != 'no':
-    #     num_models = int(args.fix_num_models)
-    #     print("runnning with a fixed number of models")
-    #     run_experiments_v2(args.e, args.seed, args.threshold_arr, attack_model_size, num_predictions=50,
-    #                        dimension=dimension, number_shadow_models=[num_models],
-    #                        model = args.model, timesteps=args.timesteps, max_ep_length = args.trajectory_length)
-    # else:
-    #     run_experiments_v2(args.e, args.seed, args.threshold_arr, attack_model_size, num_predictions=500,
-    #                        dimension=dimension, number_shadow_models=num_shadow_models,
-    #                        model = args.model, timesteps=args.timesteps, max_ep_length = args.trajectory_length)
