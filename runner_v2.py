@@ -10,9 +10,10 @@ import torch
 import BCQ
 import DDPG
 import BCQutils
+import datetime
+import logging
 
-from workers import attack, experiment
-
+logger = logging.getLogger(__name__)
 
 # Handles interactions with the environment, i.e. train behavioral or generate buffer
 def interact_with_environment(attack_path, env, state_dim, action_dim, max_action, device, args):
@@ -299,8 +300,25 @@ if __name__ == "__main__":
     if not os.path.exists(f"{attack_path}/buffers"):
         os.makedirs(f"{attack_path}/buffers")
 
-    env = gym.make(args.env)
+    if not os.path.exists(f"{attack_path}/log"):
+        os.makedirs(f"{attack_path}/log")
 
+    logging.basicConfig(
+        level=logging.DEBUG, filename=attack_path + "/" + str(datetime.datetime.now()).replace(" ", "_") + "_log.txt")
+
+    logging.getLogger().addHandler(logging.StreamHandler())
+
+    header = "===================== Experiment configuration ========================"
+    logger.info(header)
+    args_keys = list(vars(args).keys())
+    args_keys.sort()
+    max_k = len(max(args_keys, key=lambda x: len(x)))
+    for k in args_keys:
+        s = k + '.' * (max_k - len(k)) + ': %s' % repr(getattr(args, k))
+        logger.info(s + ' ' * max((len(header) - len(s), 0)))
+    logger.info("=" * len(header))
+
+    env = gym.make(args.env)
     env.seed(args.env_seed)
     # Bounding the maximum allowed trajectory length in the environment
     env._max_episode_steps = args.max_traj_len
