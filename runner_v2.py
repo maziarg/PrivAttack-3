@@ -304,7 +304,8 @@ if __name__ == "__main__":
         os.makedirs(f"{attack_path}/log")
 
     logging.basicConfig(
-        level=logging.DEBUG, filename=attack_path + "/" + str(datetime.datetime.now()).replace(" ", "_") + "_log.txt")
+        level=logging.DEBUG,
+        filename=attack_path + "/log/" + str(datetime.datetime.now()).replace(" ", "_") + "_log.txt")
 
     logging.getLogger().addHandler(logging.StreamHandler())
 
