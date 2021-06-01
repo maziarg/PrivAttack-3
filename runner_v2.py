@@ -76,7 +76,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
         if done:
             # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-            print(
+            logger.info(
                 f"Total T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
             # Reset environment
             state, done = env.reset(), False
@@ -127,7 +127,7 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
         np.save(f"{attack_path}/results/BCQ_{setting}", evaluations)
 
         training_iters += args.eval_freq
-        print(f"Training iterations: {training_iters}")
+        logger.info(f"Training iterations: {training_iters}")
     policy.save(f"{attack_path}/models/target_{setting}")
 
 
@@ -151,9 +151,9 @@ def eval_policy(policy, env_name, seed, env_seed, eval_episodes=10, max_episode_
 
     avg_reward /= eval_episodes
 
-    print("---------------------------------------")
-    print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
-    print("---------------------------------------")
+    logger.info("---------------------------------------")
+    logger.info(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
+    logger.info("---------------------------------------")
     return avg_reward
 
 
@@ -214,7 +214,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
             state = next_state
             episode_reward += reward
             # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-        print(
+        logger.info(
              f"Total T: {total_t + 1}, Episode Num: {episode_num}, Episode T: {episode_timesteps}, "
              f"Reward: {episode_reward:.3f}")
 
@@ -275,17 +275,17 @@ if __name__ == "__main__":
 
     ######BCQ Implementation Starts Here#########
 
-    print(50*"-")
+    logger.info(50*"-")
     if args.train_behavioral:
-        print(f"Setting: Training behavioral, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
+        logger.info(f"Setting: Training behavioral, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
     elif args.generate_buffer:
-        print(f"Setting: Generating buffer, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
+        logger.info(f"Setting: Generating buffer, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
     else:
-        print(f"Setting: Training BCQ, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
-    print(50*"-")
+        logger.info(f"Setting: Training BCQ, Env: {args.env}, Seed: {args.seed}, Max Trajectory Length: {args.max_traj_len}")
+    logger.info(50*"-")
 
     if args.train_behavioral and args.generate_buffer:
-        print("Train_behavioral and generate_buffer cannot both be true.")
+        logger.info("Train_behavioral and generate_buffer cannot both be true.")
         exit()
 
     attack_path = f"{os.path.expanduser('~')}/learning_output/{args.env}/{args.max_timesteps}/" \
