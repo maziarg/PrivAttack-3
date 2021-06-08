@@ -30,7 +30,7 @@ if __name__ == "__main__":
                                                                     "for num_models > 2: "
                                                                     "the number of shadow_seeds = num_models") # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--target_seeds", nargs=2, type=int)
-    parser.add_argument("--env_seed", type=int)
+    parser.add_argument("--env_seeds", nargs='+', type=int, help="Number of inputs = num_models + 1")
     parser.add_argument("--buffer_name", default="Robust")          # Prepends name to filename
 
     parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     pair_path_results = file_path_results + f"/pairs/{args.pairing_mode}/train_NumModel_{args.num_models}_" \
                                             f"ShSeed_{args.shadow_seeds}_TaSeed_{args.target_seeds}_" \
-                                            f"EnvSeed_{args.env_seed}"
+                                            f"EnvSeed_{args.env_seeds}"
 
     if not os.path.exists(pair_path_results):
         os.makedirs(pair_path_results)

@@ -131,13 +131,15 @@ def get_models(x_i, y_i, num_trajectories_per_model):
 
 
 def print_experiment(env, shadow_seeds, target_seeds, threshold, num_predictions,
-                     max_traj_len, num_models):
+                     max_traj_len, num_models, num_training_samples, num_eval_samples):
     logger.info("---------------------------")
     logger.info(f"Running Environment: {env}")
     logger.info(f"number of shadow models: {num_models}")
     logger.info(f"shadow seeds: {shadow_seeds}")
     logger.info(f"target seeds: {target_seeds}")
     logger.info(f"Thresholds: {threshold}")
+    logger.info(f"Number of training samples: {num_training_samples}")
+    logger.info(f"Number of evaluation samples: {num_eval_samples}")
     logger.info(f"Number of predictions: {num_predictions}")
     logger.info(f"Maximum Trajectory Length: {max_traj_len}")
     logger.info("---------------------------")

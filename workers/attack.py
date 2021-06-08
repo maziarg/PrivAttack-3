@@ -141,11 +141,11 @@ def get_seeds_test_pairs(label, seeds):
     return train_seed, test_seed
 
 
-def get_buffer_properties(buffer_name, attack_path, state_dim, action_dim, device, args, seed):
+def get_buffer_properties(buffer_name, attack_path, state_dim, action_dim, device, args, seed, env_seed):
     """Loads buffers and returns some buffer properties"""
     logger.info("Retreiving buffer properties...")
     replay_buffer_train = BCQutils.ReplayBuffer(state_dim, action_dim, device)
-    replay_buffer_train.load(f"{attack_path}/{args.env_seed}/{seed}/{args.max_traj_len}/buffers/{buffer_name}")
+    replay_buffer_train.load(f"{attack_path}/{env_seed}/{seed}/{args.max_traj_len}/buffers/{buffer_name}")
 
     num_trajectories = replay_buffer_train.num_trajectories
     start_states = replay_buffer_train.initial_state
@@ -158,15 +158,20 @@ def create_pairs(
     attack_path, state_dim, action_dim, device, args, label, train_seed, test_seed,
     do_train=True, train_padding_len=0, test_padding_len=0, padding_len=0):
 
+    if not do_train:
+        env_seed = args.env_seeds[-1]
+    else:
+        env_seed = args.env_seeds[args.shadow_seeds.index(test_seed)]
+
     # Getting training buffer properties
-    buffer_name_train = f"{args.buffer_name}_{args.env}_{args.env_seed}_{train_seed}"
+    buffer_name_train = f"{args.buffer_name}_{args.env}_{env_seed}_{train_seed}"
     train_num_trajectories, train_start_states, train_trajectories_end_index = get_buffer_properties(
-        buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
+        buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed, env_seed)
 
     # BCQ output
-    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{args.env_seed}_{test_seed}_{args.bcq_max_timesteps}_compatible"
+    buffer_name_test = f"target_{args.buffer_name}_{args.env}_{env_seed}_{test_seed}_{args.bcq_max_timesteps}_compatible"
     test_num_trajectories, test_start_states, test_trajectories_end_index = get_buffer_properties(
-        buffer_name_test, attack_path, state_dim, action_dim, device, args, test_seed)
+        buffer_name_test, attack_path, state_dim, action_dim, device, args, test_seed, env_seed)
 
     if train_num_trajectories != test_num_trajectories and train_seed == test_seed:
         raise ValueError('"in" and "out" buffers do not have same number of trajectories ... ')
@@ -176,20 +181,20 @@ def create_pairs(
         raise ValueError('the initial states are not the same in the "in" and "out" buffers')
 
     if do_train:
-        num_trajectories = min(train_num_trajectories, test_num_trajectories) / args.num_models
+        num_trajectories = int(round(min(train_num_trajectories, test_num_trajectories) / args.num_models))
         # Choosing 80% of input trajectories for training and the rest for evaluation
         train_size = int(round(num_trajectories * 0.80))
         # eval_train_size = int(round(num_trajectories - train_size))
 
     else:
 
-        num_trajectories = train_size = min(args.attack_sizes[0], train_num_trajectories, test_num_trajectories)
+        num_trajectories = train_size = int(min(args.attack_sizes[0], train_num_trajectories, test_num_trajectories))
         # eval_train_size = 0
 
     test_seq_buffer = np.load(
-        f"{attack_path}/{args.env_seed}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy")
+        f"{attack_path}/{env_seed}/{test_seed}/{args.max_traj_len}/buffers/{buffer_name_test}_action.npy")
     train_seq_buffer = np.load(
-        f"{attack_path}/{args.env_seed}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy")
+        f"{attack_path}/{env_seed}/{train_seed}/{args.max_traj_len}/buffers/{buffer_name_train}_action.npy")
 
     final_train_dataset, final_eval_dataset = generate_correlated_decorrelated_pairs(
         test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index, train_size,
@@ -314,7 +319,7 @@ def generate_correlated_decorrelated_pairs(
     else:
         logger.info("generating CORRELATED pairs for prediction... ")
 
-    for j in range(int(num_trajectories)):
+    for j in range(num_trajectories):
 
         if do_train and j >= train_size:
             if pairing_mode == 'horizontal':
@@ -602,7 +607,10 @@ def output_prec_recall(tp, tn, fn, fp, total):
     else:
         mcc = tp * tn - fp * fn
 
-    f1 = 2 * prec * recall / (prec + recall)
+    if prec + recall == 0:
+        f1 = -1
+    else:
+        f1 = 2 * prec * recall / (prec + recall)
 
     return round(acc, 3), round(prec, 3), round(recall, 3), round(mcc, 3), round(f1, 3)
 
@@ -859,8 +867,11 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
 
     logger.info(f"Final tuned parameters:\n {xgb1}")
 
+    num_training_samples = attack_train_data_x.shape[0]
+    num_eval_samples = attack_eval_data_x.shape[0]
+
     print_experiment(args.env, args.shadow_seeds, args.target_seeds, args.attack_thresholds,
-                     num_predictions, args.max_traj_len, args.num_models)
+                     num_predictions, args.max_traj_len, args.num_models, num_training_samples, num_eval_samples)
 
     logger.info(results)
 
@@ -882,18 +893,23 @@ def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim
 
     for train_seed, test_seed in train_test_seeds:
         # if CORRELATION_MAP.get(args.correlation) != DECORRELATED:
-            # loading buffers to get trajectories lengths
-        buffer_name_train = f"{args.buffer_name}_{args.env}_{args.env_seed}_{train_seed}"
+        # loading buffers to get trajectories lengths
+        if (train_seed in args.target_seeds) or (test_seed in args.target_seeds):
+            env_seed = args.env_seeds[-1]
+        else:
+            env_seed = args.env_seeds[args.shadow_seeds.index(test_seed)]
+
+        buffer_name_train = f"{args.buffer_name}_{args.env}_{env_seed}_{train_seed}"
         _, _, train_trajectories_end_index = get_buffer_properties(
-        buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed)
+        buffer_name_train, attack_path, state_dim, action_dim, device, args, train_seed, env_seed)
 
         # Maximum trajectory length is calculated for padding purposes
         train_traj_lens.append(compute_max_trajectory_length(train_trajectories_end_index))
 
         # BCQ output
-        buffer_name_test = f"target_{args.buffer_name}_{args.env}_{args.env_seed}_{test_seed}_{args.bcq_max_timesteps}_compatible"
+        buffer_name_test = f"target_{args.buffer_name}_{args.env}_{env_seed}_{test_seed}_{args.bcq_max_timesteps}_compatible"
         _, _, test_trajectories_end_index = get_buffer_properties(
-            buffer_name_test , attack_path, state_dim, action_dim, device, args, test_seed)
+            buffer_name_test , attack_path, state_dim, action_dim, device, args, test_seed, env_seed)
         
         # Maximum trajectory length is calculated for padding purposes
         test_traj_lens.append(compute_max_trajectory_length(test_trajectories_end_index))
