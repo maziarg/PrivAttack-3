@@ -35,9 +35,13 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
     episode_reward = 0
     episode_timesteps = 0
     episode_num = 0
+    if args.train_behavioral:
+        max_timesteps = args.max_timesteps
+    else:
+        max_timesteps = args.generatebuffer_max_timesteps
 
     # Interact with the environment for max_timesteps
-    for t in range(int(args.max_timesteps)):
+    for t in range(int(max_timesteps)):
 
         episode_timesteps += 1
 
@@ -269,7 +273,8 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='sac', help="model used to train the shadow_models") #TODO: probably must be removed
     parser.add_argument('--trajectory_length' , nargs='*', default= 1000, type = int) #Must be equal to the max_ep_length in trainer.py #TODO: The comment must be removed. We probably do not need the argument
     parser.add_argument('--max_traj_len', default=1000, type=int)
-    parser.add_argument('--bcq_max_timesteps', default=1000, type=int)
+    parser.add_argument('--bcq_max_timesteps', default=int(1e6), type=int)
+    parser.add_argument('--generatebuffer_max_timesteps', default=int(1e6), type=int)
 
     args = parser.parse_args()
 
@@ -289,6 +294,7 @@ if __name__ == "__main__":
         exit()
 
     attack_path = f"{os.path.expanduser('~')}/learning_output/{args.env}/{args.max_timesteps}/" \
+                  f"{args.generatebuffer_max_timesteps}/" \
                   f"{args.env_seed}/{args.seed}/{args.max_traj_len}"
 
     if not os.path.exists(f"{attack_path}/results"):

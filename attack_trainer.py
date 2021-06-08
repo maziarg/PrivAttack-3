@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval_freq", default=5e3, type=float)     # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=1e6,
                         type=int)   # Max time steps to run environment or train for (this defines buffer size)
+    parser.add_argument("--generatebuffer_max_timesteps", default=1e6, type=int)
     parser.add_argument("--start_timesteps", default=25e3,
                         type=int) # Time steps initial random policy is used before training behavioral
     parser.add_argument("--rand_action_p", default=0.3,
@@ -120,10 +121,12 @@ if __name__ == "__main__":
     print(f"Setting: Training Attack, Env: {args.env}, Shadow Seeds: {args.shadow_seeds}, "
           f"Target Seeds: {args.target_seeds}Max Trajectory Length: {args.max_traj_len}")
 
-    attack_path = os.path.expanduser('~') + f"/learning_output/{args.env}/{args.max_timesteps}"
+    attack_path = os.path.expanduser('~') + f"/learning_output/{args.env}/{args.max_timesteps}/" \
+                                            f"{args.generatebuffer_max_timesteps}"
 
     # *********************************** Logging Config ********************************************
     file_path_results = args.attack_final_results + f"/{args.env}/MaxT_{args.max_timesteps}/" \
+                                                    f"genT_{args.generatebuffer_max_timesteps}/" \
                                                     f"bcqMaxT_{args.bcq_max_timesteps}/MaxTraj_{args.max_traj_len}/" \
                                                     f"{CORRELATION_MAP.get(args.correlation)}"
 
