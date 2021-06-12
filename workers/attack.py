@@ -188,7 +188,8 @@ def create_pairs(
 
     else:
 
-        num_trajectories = train_size = int(min(args.attack_sizes[0], train_num_trajectories, test_num_trajectories))
+        # num_trajectories = train_size = int(min(args.attack_size, train_num_trajectories, test_num_trajectories))
+        num_trajectories = train_size = int(min(train_num_trajectories, test_num_trajectories))
         # eval_train_size = 0
 
     test_seq_buffer = np.load(
@@ -731,6 +732,18 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     attack_eval_data_x = np.load(pair_path_results + '/eval_x.npy')
     attack_eval_data_y = np.load(pair_path_results + '/eval_y.npy')
 
+    num_rows, _ = attack_train_data_x.shape
+
+    attack_train_data_x = attack_train_data_x[0:int(round(args.train_size * 0.8)), :] if\
+        args.train_size < num_rows else attack_train_data_x
+    attack_train_data_y = attack_train_data_y[0:int(round(args.train_size * 0.8)), :] if \
+        args.train_size < num_rows else attack_train_data_y
+
+    attack_eval_data_x = attack_eval_data_x[0:args.train_size - int(round(args.train_size * 0.8)), :] if\
+        args.train_size < num_rows else attack_eval_data_x
+    attack_eval_data_y = attack_eval_data_y[0:args.train_size - int(round(args.train_size * 0.8)), :] if \
+        args.train_size < num_rows else attack_eval_data_y
+
     attack_train_eval_x = np.vstack((attack_train_data_x, attack_eval_data_x))
     attack_train_eval_y = np.vstack((attack_train_data_y, attack_eval_data_y))
     attack_train_eval_y = np.ravel(attack_train_eval_y)
@@ -851,6 +864,13 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     attack_test_data_x = np.load(pair_path_results + '/test_x.npy')
     attack_test_data_y = np.load(pair_path_results + '/test_y.npy')
 
+    num_rows, _ = attack_test_data_x.shape
+
+    attack_test_data_x = attack_test_data_x[0:args.attack_size, :] if \
+        args.attack_size < num_rows else attack_test_data_x
+    attack_test_data_y = attack_test_data_y[0:args.attack_size, :] if \
+        args.attack_size < num_rows else attack_test_data_y
+
     classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
 
     logger.info("predicting ...")
@@ -861,7 +881,8 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     # NOTE: the number of predictions cannot be more than then number of rows in attack_test_data_x
     # Adjusting num_predictions accordingly
     num_rows, num_columns = attack_test_data_x.shape
-    num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
+    # num_predictions = args.attack_sizes[0] if args.attack_sizes[0] <= num_rows else num_rows
+    num_predictions = attack_test_data_x.shape[0]
     _, _, _, _, results = accuracy_report_2(
         classifier_predictions, attack_test_data_y, args.attack_thresholds, num_predictions, results)
 

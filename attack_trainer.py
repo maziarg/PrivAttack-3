@@ -52,7 +52,8 @@ if __name__ == "__main__":
     parser.add_argument("--train_policy", action="store_true")  # If true, train policy (BCQ)
     parser.add_argument("--generate_buffer", action="store_true")  # If true, generate buffer
     parser.add_argument("--attack_thresholds", nargs='+', type=float)  # Threshold for attack training
-    parser.add_argument("--attack_sizes", nargs='*', type=int)  # Attack training size
+    parser.add_argument("--attack_size", default=1000, type=int)  # Attack prediction size
+    parser.add_argument("--train_size", default=20000, type=int)  # Attack train size for label 1 or 0
     parser.add_argument('--out_traj_size', default=10, type=int) # This is used to bound the number of test trajectories
     parser.add_argument('--in_traj_size', default=10, type=int) # This is used to bound the number of train trajectories
     parser.add_argument('--ratio_size_prediction', default=0.25, type=float, help="determines the ratio of out- and "
