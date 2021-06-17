@@ -26,7 +26,10 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
     if args.generate_buffer: policy.load(f"{attack_path}/models/behavioral_{setting}")
 
     # Initialize buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
+    if args.train_behavioral:
+        replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.max_timesteps)
+    else:
+        replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device, max_size=args.generatebuffer_max_timesteps)
 
     evaluations = []
 
