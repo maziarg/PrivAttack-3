@@ -67,12 +67,17 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
         # In fact the code in gym, seems to be doing that.
         # done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
 
-        # Store data in replay buffer
-        replay_buffer.add(state, action, next_state, reward, float(done))
+        if args.generate_buffer and t == args.generatebuffer_max_timesteps - 1:
+            replay_buffer.add(state, action, next_state, reward, float(1))
+            done = False
+            # replay_buffer.num_trajectories += 1
+            # replay_buffer.trajectory_end_index.append(t)
+        else:
+            # Store data in replay buffer
+            replay_buffer.add(state, action, next_state, reward, float(done))
 
-        if t == args.max_timesteps - 1 and not done:
-            replay_buffer.num_trajectories += 1
-            replay_buffer.trajectory_end_index.append(t)
+        if args.generate_buffer and t == args.generatebuffer_max_timesteps - 1:
+            done = False
 
         state = next_state
         episode_reward += reward
@@ -296,7 +301,7 @@ if __name__ == "__main__":
         logger.info("Train_behavioral and generate_buffer cannot both be true.")
         exit()
 
-    attack_path = f"{os.path.expanduser('~')}/learning_output/{args.env}/{args.max_timesteps}/" \
+    attack_path = f"{os.path.expanduser('~')}/projects/rrg-dprecup/samin/learning_output/{args.env}/{args.max_timesteps}/" \
                   f"{args.generatebuffer_max_timesteps}/" \
                   f"{args.env_seed}/{args.seed}/{args.max_traj_len}"
 
@@ -348,4 +353,3 @@ if __name__ == "__main__":
         policy_interact_with_environment(attack_path, env, state_dim, action_dim, max_action, device, args)
     else:
         raise NotImplementedError
-

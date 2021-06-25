@@ -122,7 +122,7 @@ if __name__ == "__main__":
     print(f"Setting: Training Attack, Env: {args.env}, Shadow Seeds: {args.shadow_seeds}, "
           f"Target Seeds: {args.target_seeds}Max Trajectory Length: {args.max_traj_len}")
 
-    attack_path = os.path.expanduser('~') + f"/learning_output/{args.env}/{args.max_timesteps}/" \
+    attack_path = os.path.expanduser('~') + f"/projects/rrg-dprecup/samin/learning_output/{args.env}/{args.max_timesteps}/" \
                                             f"{args.generatebuffer_max_timesteps}"
 
     # *********************************** Logging Config ********************************************
