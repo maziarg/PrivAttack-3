@@ -76,9 +76,9 @@ def pad_traj(traj, padd_len):
     """adds padding to a trajectory"""
     if not isinstance(traj, np.ndarray):
         raise Exception("Failed to padd the trajectory: Wrong trajectory type")
-    # last = np.array([traj[-1]])
-    # padding_element = np.tile(last, (int(padd_len) - traj.shape[0], 1))
-    padding_element = np.tile(np.zeros((1, traj.shape[1])), (int(padd_len) - traj.shape[0], 1))
+    last = np.array([traj[-1, :]])
+    padding_element = np.tile(last, (int(padd_len) - traj.shape[0], 1))
+    # padding_element = np.tile(np.zeros((1, traj.shape[1])), (int(padd_len) - traj.shape[0], 1))
     test_seq = np.vstack([traj, padding_element])
     return test_seq
 
@@ -1016,8 +1016,8 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
     # attack_train_neg_data, attack_train_neg_label = attack_train_negative_data
     attack_train_data_x = np.vstack((attack_train_pos_data, attack_train_neg_data))
     attack_train_data_y = np.vstack((attack_train_pos_label, attack_train_neg_label))
-    attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
-    attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
+    attack_train_data_x1, attack_train_data_y1 = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
+    attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x1, attack_train_data_y1)
 
     np.save(pair_path_results + '/train_x', attack_train_data_x)
     np.save(pair_path_results + '/train_y', attack_train_data_y)
@@ -1029,8 +1029,8 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
     # attack_eval_neg_data, attack_eval_neg_label = attack_eval_negative_data
     attack_eval_data_x = np.vstack((attack_eval_pos_data, attack_eval_neg_data))
     attack_eval_data_y = np.vstack((attack_eval_pos_label, attack_eval_neg_label))
-    attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
-    attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
+    attack_eval_data_x1, attack_eval_data_y1 = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
+    attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x1, attack_eval_data_y1)
 
     np.save(pair_path_results + '/eval_x', attack_eval_data_x)
     np.save(pair_path_results + '/eval_y', attack_eval_data_y)
@@ -1061,8 +1061,8 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
     final_train_dataset_neg, final_train_dataset_neg_label = attack_train_negative_data
     attack_test_data_x = np.vstack((final_train_dataset_pos, final_train_dataset_neg))
     attack_test_data_y = np.vstack((final_train_dataset_pos_label, final_train_dataset_neg_label))
-    attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
-    attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
+    attack_test_data_x1, attack_test_data_y1 = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
+    attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x1, attack_test_data_y1)
 
     np.save(pair_path_results + '/test_x', attack_test_data_x)
     np.save(pair_path_results + '/test_y', attack_test_data_y)
