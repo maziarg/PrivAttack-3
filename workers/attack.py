@@ -72,14 +72,22 @@ def compute_max_trajectory_length(trajectories_end_indices):
     return max_length
 
 
-def pad_traj(traj, padd_len):
+def pad_traj(traj, padd_len, fixed_padding_size, truncate_traj=False):
     """adds padding to a trajectory"""
     if not isinstance(traj, np.ndarray):
         raise Exception("Failed to padd the trajectory: Wrong trajectory type")
-    last = np.array([traj[-1, :]])
-    padding_element = np.tile(last, (int(padd_len) - traj.shape[0], 1))
-    # padding_element = np.tile(np.zeros((1, traj.shape[1])), (int(padd_len) - traj.shape[0], 1))
-    test_seq = np.vstack([traj, padding_element])
+    if not truncate_traj:
+        last = np.array([traj[-1, :]])
+        padding_element = np.tile(last, (int(padd_len) - traj.shape[0], 1))
+        # padding_element = np.tile(np.zeros((1, traj.shape[1])), (int(padd_len) - traj.shape[0], 1))
+        test_seq = np.vstack([traj, padding_element])
+    else:
+        if traj.shape[0] < fixed_padding_size:
+            last = np.array([traj[-1, :]])
+            padding_element = np.tile(last, (int(fixed_padding_size) - traj.shape[0], 1))
+            test_seq = np.vstack([traj, padding_element])
+        else:
+            test_seq = traj[0:fixed_padding_size, :]
     return test_seq
 
 
@@ -201,7 +209,8 @@ def create_pairs(
         test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index, train_size,
         num_trajectories, train_start_states, label, do_train, correlation=args.correlation,
         test_padding_len=test_padding_len, train_padding_len=train_padding_len,
-        padding_len=padding_len, pairing_mode=args.pairing_mode)
+        padding_len=padding_len, fixed_padding_size=args.padding_size,
+        pairing_mode=args.pairing_mode, truncate_traj=args.truncate_traj)
 
     return final_train_dataset, final_eval_dataset
 
@@ -304,7 +313,8 @@ def generate_correlated_pairs(
 def generate_correlated_decorrelated_pairs(
         test_seq_buffer, train_seq_buffer, test_trajectories_end_index, train_trajectories_end_index, train_size,
         num_trajectories, train_start_states, label, do_train, correlation=CORRELATED, test_padding_len=None,
-        train_padding_len=None, padding_len=None, pairing_mode='horizontal'):
+        train_padding_len=None, padding_len=None, fixed_padding_size=25,
+        pairing_mode='horizontal', truncate_traj=False):
     """
     Randomly selects start states, action train/test_seq_buffer, and label
     A trajectory length is set using args.max_traj_len. This value should be the length of the entire
@@ -330,10 +340,11 @@ def generate_correlated_decorrelated_pairs(
                 else:
                     eval_in_seq = pad_traj(
                         train_seq_buffer[train_trajectories_end_index[j - 1] + 1:
-                                         train_trajectories_end_index[j] + 1, :], train_padding_len)
+                                         train_trajectories_end_index[j] + 1, :],
+                        train_padding_len, fixed_padding_size, truncate_traj)
                 eval_out_seq = pad_traj(
                     test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
-                    test_padding_len)
+                    test_padding_len, fixed_padding_size, truncate_traj)
             elif pairing_mode == 'vertical':
                 if correlation == 'DECORRELATED':
                     eval_in_seq = train_seq_buffer[np.random.choice(
@@ -341,10 +352,11 @@ def generate_correlated_decorrelated_pairs(
                 else:
                     eval_in_seq = pad_traj(
                         train_seq_buffer[train_trajectories_end_index[j - 1] + 1:
-                                         train_trajectories_end_index[j] + 1, :], padding_len)
+                                         train_trajectories_end_index[j] + 1, :], padding_len,
+                        fixed_padding_size, truncate_traj)
                 eval_out_seq = pad_traj(
                     test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
-                    padding_len)
+                    padding_len, fixed_padding_size, truncate_traj)
             else:
                 raise NotImplementedError
             if CORRELATION_MAP.get(correlation) == 'SEMI_CORRELATED':
@@ -366,10 +378,13 @@ def generate_correlated_decorrelated_pairs(
                 if j == 0 and CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
                     in_seq = train_seq_buffer[np.random.choice(
                         train_seq_buffer.shape[0], train_padding_len, replace=True), :]
-                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], test_padding_len)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], test_padding_len,
+                                       fixed_padding_size, truncate_traj)
                 elif j == 0:
-                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :], train_padding_len)
-                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], test_padding_len)
+                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :], train_padding_len,
+                                      fixed_padding_size, truncate_traj)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], test_padding_len,
+                                       fixed_padding_size, truncate_traj)
                 else:
                     if CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
                         in_seq = train_seq_buffer[np.random.choice(
@@ -377,18 +392,22 @@ def generate_correlated_decorrelated_pairs(
                     else:
                         in_seq = pad_traj(
                             train_seq_buffer[train_trajectories_end_index[j - 1] + 1:
-                                             train_trajectories_end_index[j] + 1, :], train_padding_len)
+                                             train_trajectories_end_index[j] + 1, :], train_padding_len,
+                            fixed_padding_size, truncate_traj)
                     out_seq = pad_traj(
                         test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
-                        test_padding_len)
+                        test_padding_len, fixed_padding_size, truncate_traj)
             elif pairing_mode == 'vertical':
                 if j == 0 and CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
                     in_seq = train_seq_buffer[np.random.choice(
                         train_seq_buffer.shape[0], padding_len, replace=True), :]
-                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], padding_len)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], padding_len,
+                                       fixed_padding_size, truncate_traj)
                 elif j == 0:
-                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :], padding_len)
-                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :], padding_len)
+                    in_seq = pad_traj(train_seq_buffer[0: train_trajectories_end_index[0] + 1, :],
+                                      padding_len, fixed_padding_size, truncate_traj)
+                    out_seq = pad_traj(test_seq_buffer[0: test_trajectories_end_index[0] + 1, :],
+                                       padding_len, fixed_padding_size, truncate_traj)
                 else:
                     if CORRELATION_MAP.get(correlation) == 'DECORRELATED' and do_train:
                         in_seq = train_seq_buffer[np.random.choice(
@@ -396,10 +415,10 @@ def generate_correlated_decorrelated_pairs(
                     else:
                         in_seq = pad_traj(
                             train_seq_buffer[train_trajectories_end_index[j-1] + 1: train_trajectories_end_index[j] + 1, :],
-                            padding_len)
+                            padding_len, fixed_padding_size, truncate_traj)
                     out_seq = pad_traj(
                         test_seq_buffer[test_trajectories_end_index[j-1] + 1: test_trajectories_end_index[j] + 1, :],
-                        padding_len)
+                        padding_len, fixed_padding_size, truncate_traj)
             else:
                 raise ValueError('No padding length defined!')
             if CORRELATION_MAP.get(correlation) == 'SEMI_CORRELATED' and do_train:
@@ -727,22 +746,44 @@ def log_eval(period=1, show_stdv=True):
 def train_attack_model_v4(file_path_results, pair_path_results, args):
 
     logger.info("loading the train/eval pairs ...")
-    attack_train_data_x = np.load(pair_path_results + '/train_x.npy')
-    attack_train_data_y = np.load(pair_path_results + '/train_y.npy')
-    attack_eval_data_x = np.load(pair_path_results + '/eval_x.npy')
-    attack_eval_data_y = np.load(pair_path_results + '/eval_y.npy')
+    attack_train_data_pos_x = np.load(pair_path_results + '/train_positive_x.npy')
+    attack_train_data_pos_y = np.load(pair_path_results + '/train_positive_y.npy')
+    attack_train_data_neg_x = np.load(pair_path_results + '/train_negative_x.npy')
+    attack_train_data_neg_y = np.load(pair_path_results + '/train_negative_y.npy')
+    attack_eval_data_pos_x = np.load(pair_path_results + '/eval_positive_x.npy')
+    attack_eval_data_pos_y = np.load(pair_path_results + '/eval_positive_y.npy')
+    attack_eval_data_neg_x = np.load(pair_path_results + '/eval_negative_x.npy')
+    attack_eval_data_neg_y = np.load(pair_path_results + '/eval_negative_y.npy')
 
-    num_rows, _ = attack_train_data_x.shape
+    num_rows, _ = attack_train_data_pos_x.shape
 
-    attack_train_data_x = attack_train_data_x[0:int(round(args.train_size * 0.8)), :] if\
-        args.train_size < num_rows else attack_train_data_x
-    attack_train_data_y = attack_train_data_y[0:int(round(args.train_size * 0.8)), :] if \
-        args.train_size < num_rows else attack_train_data_y
+    attack_train_data_pos_x = attack_train_data_pos_x[0:int(round(args.train_size * 0.8)), :] if\
+        args.train_size * 0.8 < num_rows else attack_train_data_pos_x
+    attack_train_data_pos_y = attack_train_data_pos_y[0:int(round(args.train_size * 0.8)), :] if \
+        args.train_size * 0.8 < num_rows else attack_train_data_pos_y
+    attack_train_data_neg_x = attack_train_data_neg_x[0:int(round(args.train_size * 0.8)), :] if\
+        args.train_size * 0.8 < num_rows else attack_train_data_neg_x
+    attack_train_data_neg_y = attack_train_data_neg_y[0:int(round(args.train_size * 0.8)), :] if \
+        args.train_size * 0.8 < num_rows else attack_train_data_neg_y
 
-    attack_eval_data_x = attack_eval_data_x[0:args.train_size - int(round(args.train_size * 0.8)), :] if\
-        args.train_size < num_rows else attack_eval_data_x
-    attack_eval_data_y = attack_eval_data_y[0:args.train_size - int(round(args.train_size * 0.8)), :] if \
-        args.train_size < num_rows else attack_eval_data_y
+    attack_eval_data_pos_x = attack_eval_data_pos_x[0:args.train_size - int(round(args.train_size * 0.8)), :] if\
+        args.train_size * 0.8 < num_rows else attack_eval_data_pos_x
+    attack_eval_data_pos_y = attack_eval_data_pos_y[0:args.train_size - int(round(args.train_size * 0.8)), :] if \
+        args.train_size * 0.8 < num_rows else attack_eval_data_pos_y
+    attack_eval_data_neg_x = attack_eval_data_neg_x[0:args.train_size - int(round(args.train_size * 0.8)), :] if\
+        args.train_size * 0.8 < num_rows else attack_eval_data_neg_x
+    attack_eval_data_neg_y = attack_eval_data_neg_y[0:args.train_size - int(round(args.train_size * 0.8)), :] if \
+        args.train_size * 0.8 < num_rows else attack_eval_data_neg_y
+
+    attack_train_data_x = np.vstack((attack_train_data_pos_x, attack_train_data_neg_x))
+    attack_train_data_y = np.vstack((attack_train_data_pos_y, attack_train_data_neg_y))
+    attack_train_data_x1, attack_train_data_y1 = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
+    attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x1, attack_train_data_y1)
+
+    attack_eval_data_x = np.vstack((attack_eval_data_pos_x, attack_eval_data_neg_x))
+    attack_eval_data_y = np.vstack((attack_eval_data_pos_y, attack_eval_data_neg_y))
+    attack_eval_data_x1, attack_eval_data_y1 = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
+    attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x1, attack_eval_data_y1)
 
     attack_train_eval_x = np.vstack((attack_train_data_x, attack_eval_data_x))
     attack_train_eval_y = np.vstack((attack_train_data_y, attack_eval_data_y))
@@ -861,15 +902,26 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     logger.info("training finished ...")
     logger.info("loading the test pairs ...")
 
-    attack_test_data_x = np.load(pair_path_results + '/test_x.npy')
-    attack_test_data_y = np.load(pair_path_results + '/test_y.npy')
+    attack_test_data_pos_x = np.load(pair_path_results + '/test_positive_x.npy')
+    attack_test_data_pos_y = np.load(pair_path_results + '/test_positive_y.npy')
+    attack_test_data_neg_x = np.load(pair_path_results + '/test_negative_x.npy')
+    attack_test_data_neg_y = np.load(pair_path_results + '/test_negative_y.npy')
 
-    num_rows, _ = attack_test_data_x.shape
+    num_rows, _ = attack_test_data_pos_x.shape
 
-    attack_test_data_x = attack_test_data_x[0:args.attack_size, :] if \
-        args.attack_size < num_rows else attack_test_data_x
-    attack_test_data_y = attack_test_data_y[0:args.attack_size, :] if \
-        args.attack_size < num_rows else attack_test_data_y
+    attack_test_data_pos_x = attack_test_data_pos_x[0:args.attack_size, :] if \
+        args.attack_size < num_rows else attack_test_data_pos_x
+    attack_test_data_pos_y = attack_test_data_pos_y[0:args.attack_size, :] if \
+        args.attack_size < num_rows else attack_test_data_pos_y
+    attack_test_data_neg_x = attack_test_data_neg_x[0:args.attack_size, :] if \
+        args.attack_size < num_rows else attack_test_data_neg_x
+    attack_test_data_neg_y = attack_test_data_neg_y[0:args.attack_size, :] if \
+        args.attack_size < num_rows else attack_test_data_neg_y
+
+    attack_test_data_x = np.vstack((attack_test_data_pos_x, attack_test_data_neg_x))
+    attack_test_data_y = np.vstack((attack_test_data_pos_y, attack_test_data_neg_y))
+    attack_test_data_x1, attack_test_data_y1 = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
+    attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x1, attack_test_data_y1)
 
     classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
 
@@ -1014,26 +1066,22 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
     # Instanciating xgboost DMatrix with positive/negative train data
     # attack_train_pos_data, attack_train_pos_label = attack_train_positive_data
     # attack_train_neg_data, attack_train_neg_label = attack_train_negative_data
-    attack_train_data_x = np.vstack((attack_train_pos_data, attack_train_neg_data))
-    attack_train_data_y = np.vstack((attack_train_pos_label, attack_train_neg_label))
-    attack_train_data_x1, attack_train_data_y1 = shuffle_xgboost_params(attack_train_data_x, attack_train_data_y)
-    attack_train_data_x, attack_train_data_y = shuffle_xgboost_params(attack_train_data_x1, attack_train_data_y1)
 
-    np.save(pair_path_results + '/train_x', attack_train_data_x)
-    np.save(pair_path_results + '/train_y', attack_train_data_y)
+    np.save(pair_path_results + '/train_positive_x', attack_train_pos_data)
+    np.save(pair_path_results + '/train_positive_y', attack_train_pos_label)
+    np.save(pair_path_results + '/train_negative_x', attack_train_neg_data)
+    np.save(pair_path_results + '/train_negative_y', attack_train_neg_label)
     logger.info("saving train data for classifier training ... Done")
 
 
     # Instanciating xgboost DMatrix with positive/negative train data
     # attack_eval_pos_data, attack_eval_pos_label = attack_eval_positive_data
     # attack_eval_neg_data, attack_eval_neg_label = attack_eval_negative_data
-    attack_eval_data_x = np.vstack((attack_eval_pos_data, attack_eval_neg_data))
-    attack_eval_data_y = np.vstack((attack_eval_pos_label, attack_eval_neg_label))
-    attack_eval_data_x1, attack_eval_data_y1 = shuffle_xgboost_params(attack_eval_data_x, attack_eval_data_y)
-    attack_eval_data_x, attack_eval_data_y = shuffle_xgboost_params(attack_eval_data_x1, attack_eval_data_y1)
 
-    np.save(pair_path_results + '/eval_x', attack_eval_data_x)
-    np.save(pair_path_results + '/eval_y', attack_eval_data_y)
+    np.save(pair_path_results + '/eval_positive_x', attack_eval_pos_data)
+    np.save(pair_path_results + '/eval_positive_y', attack_eval_pos_label)
+    np.save(pair_path_results + '/eval_negative_x', attack_eval_neg_data)
+    np.save(pair_path_results + '/eval_negative_y', attack_eval_neg_label)
     logger.info("saving eval data for classifier training ... Done")
 
     # Positive pairs
@@ -1059,13 +1107,11 @@ def train_attack_model_v3(attack_path, file_path_results, pair_path_results, sta
 
     final_train_dataset_pos, final_train_dataset_pos_label = attack_train_positive_data
     final_train_dataset_neg, final_train_dataset_neg_label = attack_train_negative_data
-    attack_test_data_x = np.vstack((final_train_dataset_pos, final_train_dataset_neg))
-    attack_test_data_y = np.vstack((final_train_dataset_pos_label, final_train_dataset_neg_label))
-    attack_test_data_x1, attack_test_data_y1 = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
-    attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x1, attack_test_data_y1)
 
-    np.save(pair_path_results + '/test_x', attack_test_data_x)
-    np.save(pair_path_results + '/test_y', attack_test_data_y)
+    np.save(pair_path_results + '/test_positive_x', final_train_dataset_pos)
+    np.save(pair_path_results + '/test_positive_y', final_train_dataset_pos_label)
+    np.save(pair_path_results + '/test_negative_x', final_train_dataset_neg)
+    np.save(pair_path_results + '/test_negative_y', final_train_dataset_neg_label)
     logger.info("saving test data for prediction ... Done")
 
 

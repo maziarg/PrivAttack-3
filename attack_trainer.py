@@ -59,6 +59,9 @@ if __name__ == "__main__":
     parser.add_argument('--ratio_size_prediction', default=0.25, type=float, help="determines the ratio of out- and "
                                                                                   "in-traj-sizes for making prediction "
                                                                                   "pairs")
+    parser.add_argument("--truncate_traj", action="store_true")  # If true, truncates the trajectory instead of padding
+    parser.add_argument('--padding_size', default=25,
+                        type=int)  # This is used if --truncate_traj is True
 
     parser.add_argument('--just_one', default='no', choices=["yes", "no"], help="just run one experiment", type=str)
     parser.add_argument('--all', default='no', choices=["yes", 'no'], help="run all tests")
