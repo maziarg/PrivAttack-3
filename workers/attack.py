@@ -169,7 +169,8 @@ def create_pairs(
     if not do_train:
         env_seed = args.env_seeds[-1]
     else:
-        env_seed = args.env_seeds[args.shadow_seeds.index(test_seed)]
+        # env_seed = args.env_seeds[args.shadow_seeds.index(test_seed)]
+        env_seed = args.env_seeds[0]
 
     # Getting training buffer properties
     buffer_name_train = f"{args.buffer_name}_{args.env}_{env_seed}_{train_seed}"
@@ -922,6 +923,7 @@ def train_attack_model_v4(file_path_results, pair_path_results, args):
     attack_test_data_y = np.vstack((attack_test_data_pos_y, attack_test_data_neg_y))
     attack_test_data_x1, attack_test_data_y1 = shuffle_xgboost_params(attack_test_data_x, attack_test_data_y)
     attack_test_data_x, attack_test_data_y = shuffle_xgboost_params(attack_test_data_x1, attack_test_data_y1)
+    attack_test_data_y = np.ravel(attack_test_data_y)
 
     classifier_test_data = xgb.DMatrix(attack_test_data_x, attack_test_data_y)
 
@@ -970,7 +972,8 @@ def get_pairs_max_traj_len(attack_path, file_path_results, state_dim, action_dim
         if (train_seed in args.target_seeds) or (test_seed in args.target_seeds):
             env_seed = args.env_seeds[-1]
         else:
-            env_seed = args.env_seeds[args.shadow_seeds.index(test_seed)]
+            # env_seed = args.env_seeds[args.shadow_seeds.index(test_seed)]
+            env_seed = args.env_seeds[0]
 
         buffer_name_train = f"{args.buffer_name}_{args.env}_{env_seed}_{train_seed}"
         _, _, train_trajectories_end_index = get_buffer_properties(
