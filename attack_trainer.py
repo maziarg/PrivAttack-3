@@ -137,9 +137,14 @@ if __name__ == "__main__":
     if not os.path.exists(file_path_results):
         os.makedirs(file_path_results)
 
-    pair_path_results = file_path_results + f"/pairs/{args.pairing_mode}/train_NumModel_{args.num_models}_" \
+    if not args.truncate_traj:
+        pair_path_results = file_path_results + f"/pairs/{args.pairing_mode}/train_NumModel_{args.num_models}_" \
                                             f"ShSeed_{args.shadow_seeds}_TaSeed_{args.target_seeds}_" \
                                             f"EnvSeed_{args.env_seeds}"
+    else:
+        pair_path_results = file_path_results + f"/pairs/{args.pairing_mode}/train_NumModel_{args.num_models}_" \
+                                                f"ShSeed_{args.shadow_seeds}_TaSeed_{args.target_seeds}_" \
+                                                f"EnvSeed_{args.env_seeds}_padding_{args.padding_size}"
 
     if not os.path.exists(pair_path_results):
         os.makedirs(pair_path_results)
