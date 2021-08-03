@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Handles interactions with the environment, i.e. train behavioral or generate buffer
-def interact_with_environment(attack_path, env, state_dim, action_dim, max_action, device, args):
+def interact_with_environment(attack_path, env, eval_env, state_dim, action_dim, max_action, device, args):
     # For saving files
     setting = f"{args.env}_{args.env_seed}_{args.seed}"
     buffer_name = f"{args.buffer_name}_{setting}"
@@ -99,7 +99,7 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
         # Evaluate episode
         if args.train_behavioral and (t + 1) % args.eval_freq == 0:
-            evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, max_episode_step=args.max_traj_len))
+            evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, eval_env, max_episode_step=args.max_traj_len))
             np.save(f"{attack_path}/results/behavioral_{setting}", evaluations)
             policy.save(f"{attack_path}/models/behavioral_{setting}")
 
@@ -109,13 +109,13 @@ def interact_with_environment(attack_path, env, state_dim, action_dim, max_actio
 
     # Save final buffer and performance
     else:
-        evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, max_episode_step=args.max_traj_len))
+        evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, eval_env, max_episode_step=args.max_traj_len))
         np.save(f"{attack_path}/results/buffer_performance_{setting}", evaluations)
         replay_buffer.save(f"{attack_path}/buffers/{buffer_name}")
 
 
 # Trains BCQ offline
-def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
+def train_BCQ(attack_path, state_dim, action_dim, max_action, eval_env, device, args):
     buffer_name = f"{args.buffer_name}_{args.env}_{args.env_seed}_{args.seed}"
     # For saving files
     setting = f"{args.env}_{args.env_seed}_{args.seed}_{args.bcq_max_timesteps}"
@@ -135,7 +135,7 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
     while training_iters < args.bcq_max_timesteps:
         policy.train(replay_buffer, iterations=int(args.eval_freq), batch_size=args.batch_size)
 
-        evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, max_episode_step=args.max_traj_len))
+        evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, eval_env, max_episode_step=args.max_traj_len))
         np.save(f"{attack_path}/results/BCQ_{setting}", evaluations)
 
         training_iters += args.eval_freq
@@ -145,10 +145,10 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, device, args):
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, env_seed, eval_episodes=10, max_episode_step=None):
-    eval_env = gym.make(env_name)
-    # eval_env.seed(seed + 100)
-    eval_env.seed(env_seed)
+def eval_policy(policy, env_name, seed, env_seed, eval_env, eval_episodes=10, max_episode_step=None):
+    # eval_env = gym.make(env_name)
+    # # eval_env.seed(seed + 100)
+    # eval_env.seed(env_seed)
     # Bounding the maximum allowed trajectory length in the environment
     if max_episode_step:
         eval_env._max_episode_steps = max_episode_step
@@ -170,7 +170,7 @@ def eval_policy(policy, env_name, seed, env_seed, eval_episodes=10, max_episode_
 
 
 # Handles policy interactions with the environment, i.e. generate test buffer
-def policy_interact_with_environment(attack_path, env, state_dim, action_dim, max_action, device, args):
+def policy_interact_with_environment(attack_path, env, eval_env, state_dim, action_dim, max_action, device, args):
     # For saving files
     setting = f"{args.env}_{args.env_seed}_{args.seed}_{args.bcq_max_timesteps}"
     buffer_name = f"target_{args.buffer_name}_{setting}"
@@ -188,9 +188,11 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
     evaluations = []
 
     # Env initialization
-    env = gym.make(args.env)
-
-    env.seed(args.env_seed)
+    # env = gym.make(args.env)
+    # eval_env = gym.make(args.env)
+    #
+    # env.seed(args.env_seed)
+    # eval_env.seed(args.env_seed)
     # Bounding the maximum allowed trajectory length in the environment
     env._max_episode_steps = args.max_traj_len
     torch.manual_seed(args.seed)
@@ -232,7 +234,7 @@ def policy_interact_with_environment(attack_path, env, state_dim, action_dim, ma
 
 
     # Save final buffer and performance
-    evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, max_episode_step=args.max_traj_len))
+    evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, eval_env, max_episode_step=args.max_traj_len))
     np.save(f"{attack_path}/results/target_buffer_performance_{setting}", evaluations)
     replay_buffer.save(f"{attack_path}/buffers/{buffer_name}_compatible")
 
@@ -334,7 +336,9 @@ if __name__ == "__main__":
     logger.info("=" * len(header))
 
     env = gym.make(args.env)
+    eval_env = gym.make(args.env)
     env.seed(args.env_seed)
+    eval_env.seed(args.env_seed + 100)
     # Bounding the maximum allowed trajectory length in the environment
     env._max_episode_steps = args.max_traj_len
     torch.manual_seed(args.seed)
@@ -347,9 +351,9 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.train_behavioral or args.generate_buffer:
-        interact_with_environment(attack_path, env, state_dim, action_dim, max_action, device, args)
+        interact_with_environment(attack_path, env, eval_env,  state_dim, action_dim, max_action, device, args)
     elif args.train_policy:
-        train_BCQ(attack_path, state_dim, action_dim, max_action, device, args)
-        policy_interact_with_environment(attack_path, env, state_dim, action_dim, max_action, device, args)
+        train_BCQ(attack_path, state_dim, action_dim, max_action, eval_env, device, args)
+        policy_interact_with_environment(attack_path, env, eval_env, state_dim, action_dim, max_action, device, args)
     else:
         raise NotImplementedError
