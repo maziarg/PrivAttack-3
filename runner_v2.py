@@ -140,7 +140,8 @@ def train_BCQ(attack_path, state_dim, action_dim, max_action, eval_env, device, 
 
         training_iters += args.eval_freq
         logger.info(f"Training iterations: {training_iters}")
-    policy.save(f"{attack_path}/models/target_{setting}")
+    # policy.save(f"{attack_path}/models/target_{setting}")
+    policy_interact_with_environment(attack_path, policy, state_dim, action_dim, max_action, eval_env, device, args)
 
 
 # Runs policy for X episodes and returns average reward
@@ -170,40 +171,40 @@ def eval_policy(policy, env_name, seed, env_seed, eval_env, eval_episodes=10, ma
 
 
 # Handles policy interactions with the environment, i.e. generate test buffer
-def policy_interact_with_environment(attack_path, env, eval_env, state_dim, action_dim, max_action, device, args):
+def policy_interact_with_environment(file_path, policy, dim_state, dim_action, action_max, evaluation_env, device_name, arg):
     # For saving files
-    setting = f"{args.env}_{args.env_seed}_{args.seed}_{args.bcq_max_timesteps}"
-    buffer_name = f"target_{args.buffer_name}_{setting}"
+    setting = f"{arg.env}_{arg.env_seed}_{arg.seed}_{arg.bcq_max_timesteps}"
+    buffer_name = f"target_{arg.buffer_name}_{setting}"
 
-    train_initial_states = np.load(f"{attack_path}/buffers/{args.buffer_name}_{args.env}_"
-                                   f"{args.env_seed}_{args.seed}_initial_state.npy")
+    train_initial_states = np.load(f"{file_path}/buffers/{arg.buffer_name}_{arg.env}_"
+                                   f"{arg.env_seed}_{arg.seed}_initial_state.npy")
 
     # Initialize and load policy
-    policy = BCQ.BCQ(state_dim, action_dim, max_action, device, args.discount, args.tau, args.lmbda, args.phi)
-    policy.load(f"{attack_path}/models/target_{setting}")
+    # policy = BCQ.BCQ(dim_state, dim_action, action_max, device_name, arg.discount, arg.tau, arg.lmbda, arg.phi)
+    # policy.load(f"{file_path}/models/target_{setting}")
 
     # Initialize buffer
-    replay_buffer = BCQutils.ReplayBuffer(state_dim, action_dim, device,
-                                          max_size=args.max_traj_len * len(train_initial_states))
+    replay_buffer = BCQutils.ReplayBuffer(dim_state, dim_action, device_name,
+                                          max_size=arg.max_traj_len * len(train_initial_states))
     evaluations = []
 
     # Env initialization
-    # env = gym.make(args.env)
-    # eval_env = gym.make(args.env)
+    environment = gym.make(arg.env)
+    # eval_env = gym.make(arg.env)
     #
-    # env.seed(args.env_seed)
-    # eval_env.seed(args.env_seed)
+    environment.seed(arg.env_seed)
+    # eval_env.seed(arg.env_seed + 100)
     # Bounding the maximum allowed trajectory length in the environment
-    env._max_episode_steps = args.max_traj_len
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    environment._max_episode_steps = arg.max_traj_len
+    torch.manual_seed(arg.seed)
+    np.random.seed(arg.seed)
     # state = env.reset()
 
     episode_num = 0
     total_t = 0
     # Interact with the environment for max_timesteps
     for i in range(len(train_initial_states)):
-        state, done = env.reset(), False
+        state, done = environment.reset(), False
         if not np.array_equal(state, train_initial_states[i].ravel()):
             raise ValueError('The initial state is not the same as that in the training data')
         replay_buffer.initial_state.append(state)
@@ -214,10 +215,10 @@ def policy_interact_with_environment(attack_path, env, eval_env, state_dim, acti
         while not done:
             episode_timesteps += 1
             total_t += 1
-            action = policy.select_action(np.array(state)).clip(-max_action, max_action)
+            action = policy.select_action(np.array(state)).clip(-action_max, action_max)
 
         # Perform action
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _ = environment.step(action)
         # TODO: check if we need this line. This is because, we set max_episode step when we instantiate the env. Susan: No need to double check "done". The max_episode step is taking care of it.
         # Then, env should know we have reached that state and return done=True. In fact the code in gym, seems to be doing that.
         # done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
@@ -234,9 +235,10 @@ def policy_interact_with_environment(attack_path, env, eval_env, state_dim, acti
 
 
     # Save final buffer and performance
-    evaluations.append(eval_policy(policy, args.env, args.seed, args.env_seed, eval_env, max_episode_step=args.max_traj_len))
-    np.save(f"{attack_path}/results/target_buffer_performance_{setting}", evaluations)
-    replay_buffer.save(f"{attack_path}/buffers/{buffer_name}_compatible")
+    evaluations.append(eval_policy(policy, arg.env, arg.seed, arg.env_seed,
+                                   evaluation_env, max_episode_step=arg.max_traj_len))
+    np.save(f"{file_path}/results/target_buffer_performance_{setting}", evaluations)
+    replay_buffer.save(f"{file_path}/buffers/{buffer_name}_compatible")
 
 
 if __name__ == "__main__":
@@ -354,6 +356,6 @@ if __name__ == "__main__":
         interact_with_environment(attack_path, env, eval_env,  state_dim, action_dim, max_action, device, args)
     elif args.train_policy:
         train_BCQ(attack_path, state_dim, action_dim, max_action, eval_env, device, args)
-        policy_interact_with_environment(attack_path, env, eval_env, state_dim, action_dim, max_action, device, args)
+        # policy_interact_with_environment(attack_path, state_dim, action_dim, max_action, eval_env, device, args)
     else:
         raise NotImplementedError
