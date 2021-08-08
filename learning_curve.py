@@ -15,12 +15,12 @@ import subprocess
 # plt.show()
 
 env = "Hopper-v2"
-trj_len = 500
-gen_buffer_size = 10000000
+trj_len = 100
+gen_buffer_size = 4000000
 # env_seed = [20, 20, 20, 20, 20, 20, 20, 20]  # Has to be the same size as seed
 # env_seed = [200, 200, 200, 200, 200, 200, 200, 200]
-env_seed = [400, 400, 400, 400, 400, 400, 400, 400]
-seed = [100, 5, 75, 700, 80, 500, 45, 90]
+env_seed = [200, 200, 400, 400]
+seed = [80, 500, 100, 5]
 
 path = '/Users/maziargomrokchi/test_data'
 

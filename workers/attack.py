@@ -551,7 +551,7 @@ def accuracy_report_2(classifier_predictions, labels_test, threshold, num_predic
 
         results = f"{results}\nThreshold = {threshold[j]}: true_positive = {true_positives}, " \
                   f"true_negative = {true_negatives}, false_positive = {false_positives}, " \
-                  f"false_negative={false_negatives}, MCC = {mcc[j]}, F1 = {f1[j]}"
+                  f"false_negative={false_negatives}, MCC = {mcc[j]}, F1 = {f1[j]}, accuracy = {accuracy[j]}"
     return accuracy, precision, recall, RMSE_e_i, results
 
 def accuracy_report(classifier_predictions, labels_test, threshold, num_predictions):
