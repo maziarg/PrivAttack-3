@@ -690,6 +690,7 @@ def train_classifier(xgb1, xgb_train, xgb_eval, early_stopping_rounds=10, num_ro
              'gamma': xgb1.get_params()['gamma'],
              'subsample': xgb1.get_params()['subsample'],
              'colsample_bytree': xgb1.get_params()['colsample_bytree'],
+             'reg_alpha': xgb1.get_params()['reg_alpha'],
              'objective': 'reg:logistic',
              'nthread': 4,
              'scale_pos_weight': 1,
